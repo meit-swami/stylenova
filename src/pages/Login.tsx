@@ -1,36 +1,31 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { IconSparkles, IconPhone, IconLock, IconArrowRight } from '@tabler/icons-react';
+import { IconSparkles, IconMail, IconLock, IconArrowRight } from '@tabler/icons-react';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function Login() {
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [step, setStep] = useState<'phone' | 'otp'>('phone');
+  const navigate = useNavigate();
+  const { signIn } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSendOTP = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate OTP send
-    setTimeout(() => {
+    
+    try {
+      await signIn(email, password);
+      navigate('/dashboard');
+    } catch (error) {
+      // Error is handled by useAuth hook
+    } finally {
       setIsLoading(false);
-      setStep('otp');
-    }, 1500);
-  };
-
-  const handleVerifyOTP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    // Simulate verification
-    setTimeout(() => {
-      setIsLoading(false);
-      // Navigate to dashboard
-      window.location.href = '/dashboard';
-    }, 1500);
+    }
   };
 
   return (
@@ -60,91 +55,61 @@ export default function Login() {
             Sign in to your store dashboard
           </p>
 
-          {step === 'phone' ? (
-            <form onSubmit={handleSendOTP} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="phone">Mobile Number</Label>
-                <div className="relative">
-                  <IconPhone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    id="phone"
-                    type="tel"
-                    placeholder="+91 98765 43210"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="pl-10 h-12"
-                    required
-                  />
-                </div>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <div className="relative">
+                <IconMail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-10 h-12"
+                  required
+                />
               </div>
+            </div>
 
-              <Button type="submit" variant="hero" size="lg" className="w-full" disabled={isLoading}>
-                {isLoading ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Sending OTP...
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    Send OTP
-                    <IconArrowRight className="w-5 h-5" />
-                  </span>
-                )}
-              </Button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyOTP} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="otp">Enter OTP</Label>
-                <div className="relative">
-                  <IconLock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    id="otp"
-                    type="text"
-                    placeholder="Enter 6-digit OTP"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    className="pl-10 h-12 text-center text-xl tracking-widest"
-                    maxLength={6}
-                    required
-                  />
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  OTP sent to {phone}.{' '}
-                  <button
-                    type="button"
-                    onClick={() => setStep('phone')}
-                    className="text-primary hover:underline"
-                  >
-                    Change number
-                  </button>
-                </p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <Link 
+                  to="/forgot-password" 
+                  className="text-sm text-primary hover:underline"
+                >
+                  Forgot password?
+                </Link>
               </div>
+              <div className="relative">
+                <IconLock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-10 h-12"
+                  required
+                />
+              </div>
+            </div>
 
-              <Button type="submit" variant="hero" size="lg" className="w-full" disabled={isLoading}>
-                {isLoading ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Verifying...
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    Verify & Sign In
-                    <IconArrowRight className="w-5 h-5" />
-                  </span>
-                )}
-              </Button>
-
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full"
-                onClick={() => setStep('phone')}
-              >
-                Resend OTP
-              </Button>
-            </form>
-          )}
+            <Button type="submit" variant="hero" size="lg" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Signing in...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  Sign In
+                  <IconArrowRight className="w-5 h-5" />
+                </span>
+              )}
+            </Button>
+          </form>
 
           <p className="text-center text-sm text-muted-foreground mt-8">
             Don't have an account?{' '}

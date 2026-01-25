@@ -1,18 +1,20 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { 
   IconSparkles, 
-  IconPhone, 
+  IconMail, 
   IconLock, 
   IconArrowRight, 
   IconUser,
   IconBuildingStore,
-  IconCheck
+  IconCheck,
+  IconPhone
 } from '@tabler/icons-react';
+import { useAuth } from '@/hooks/useAuth';
 
 const plans = [
   { id: 'small', name: 'Small', price: '₹15,000/year', description: 'For boutiques' },
@@ -21,37 +23,35 @@ const plans = [
 ];
 
 export default function Signup() {
-  const [step, setStep] = useState<'info' | 'plan' | 'phone' | 'otp'>('info');
+  const navigate = useNavigate();
+  const { signUp } = useAuth();
+  const [step, setStep] = useState<'info' | 'plan'>('info');
   const [formData, setFormData] = useState({
-    name: '',
+    fullName: '',
     storeName: '',
+    email: '',
+    password: '',
     phone: '',
-    otp: '',
     plan: 'medium',
   });
   const [isLoading, setIsLoading] = useState(false);
 
   const handleNext = () => {
     if (step === 'info') setStep('plan');
-    else if (step === 'plan') setStep('phone');
   };
 
-  const handleSendOTP = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
+    
+    try {
+      await signUp(formData.email, formData.password, formData.fullName, formData.phone);
+      navigate('/dashboard');
+    } catch (error) {
+      // Error is handled by useAuth hook
+    } finally {
       setIsLoading(false);
-      setStep('otp');
-    }, 1500);
-  };
-
-  const handleVerifyOTP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      window.location.href = '/dashboard';
-    }, 1500);
+    }
   };
 
   return (
@@ -78,11 +78,11 @@ export default function Signup() {
 
           {/* Progress */}
           <div className="flex gap-2 mb-8">
-            {['info', 'plan', 'phone', 'otp'].map((s, i) => (
+            {['info', 'plan'].map((s, i) => (
               <div
                 key={s}
                 className={`h-1 flex-1 rounded-full transition-colors ${
-                  ['info', 'plan', 'phone', 'otp'].indexOf(step) >= i
+                  ['info', 'plan'].indexOf(step) >= i
                     ? 'bg-primary'
                     : 'bg-muted'
                 }`}
@@ -99,16 +99,16 @@ export default function Signup() {
                 Let's get started with your store details
               </p>
 
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Your Name</Label>
+                  <Label htmlFor="fullName">Your Name</Label>
                   <div className="relative">
                     <IconUser className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input
-                      id="name"
+                      id="fullName"
                       placeholder="Enter your full name"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      value={formData.fullName}
+                      onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                       className="pl-10 h-12"
                       required
                     />
@@ -130,7 +130,60 @@ export default function Signup() {
                   </div>
                 </div>
 
-                <Button onClick={handleNext} variant="hero" size="lg" className="w-full">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <div className="relative">
+                    <IconMail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="pl-10 h-12"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone (Optional)</Label>
+                  <div className="relative">
+                    <IconPhone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <Input
+                      id="phone"
+                      type="tel"
+                      placeholder="+91 98765 43210"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className="pl-10 h-12"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <div className="relative">
+                    <IconLock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="Create a strong password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      className="pl-10 h-12"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <Button 
+                  onClick={handleNext} 
+                  variant="hero" 
+                  size="lg" 
+                  className="w-full"
+                  disabled={!formData.fullName || !formData.email || !formData.password}
+                >
                   Continue
                   <IconArrowRight className="w-5 h-5" />
                 </Button>
@@ -139,7 +192,7 @@ export default function Signup() {
           )}
 
           {step === 'plan' && (
-            <>
+            <form onSubmit={handleSignup}>
               <h1 className="font-display text-3xl font-bold text-foreground mb-2">
                 Choose your plan
               </h1>
@@ -150,6 +203,7 @@ export default function Signup() {
               <div className="space-y-4 mb-8">
                 {plans.map((plan) => (
                   <button
+                    type="button"
                     key={plan.id}
                     onClick={() => setFormData({ ...formData, plan: plan.id })}
                     className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
@@ -181,80 +235,6 @@ export default function Signup() {
                 ))}
               </div>
 
-              <Button onClick={handleNext} variant="hero" size="lg" className="w-full">
-                Continue
-                <IconArrowRight className="w-5 h-5" />
-              </Button>
-            </>
-          )}
-
-          {step === 'phone' && (
-            <form onSubmit={handleSendOTP} className="space-y-6">
-              <h1 className="font-display text-3xl font-bold text-foreground mb-2">
-                Verify your number
-              </h1>
-              <p className="text-muted-foreground mb-8">
-                We'll send you an OTP to verify your identity
-              </p>
-
-              <div className="space-y-2">
-                <Label htmlFor="phone">Mobile Number</Label>
-                <div className="relative">
-                  <IconPhone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    id="phone"
-                    type="tel"
-                    placeholder="+91 98765 43210"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="pl-10 h-12"
-                    required
-                  />
-                </div>
-              </div>
-
-              <Button type="submit" variant="hero" size="lg" className="w-full" disabled={isLoading}>
-                {isLoading ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Sending OTP...
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    Send OTP
-                    <IconArrowRight className="w-5 h-5" />
-                  </span>
-                )}
-              </Button>
-            </form>
-          )}
-
-          {step === 'otp' && (
-            <form onSubmit={handleVerifyOTP} className="space-y-6">
-              <h1 className="font-display text-3xl font-bold text-foreground mb-2">
-                Enter OTP
-              </h1>
-              <p className="text-muted-foreground mb-8">
-                We sent a code to {formData.phone}
-              </p>
-
-              <div className="space-y-2">
-                <Label htmlFor="otp">OTP Code</Label>
-                <div className="relative">
-                  <IconLock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    id="otp"
-                    type="text"
-                    placeholder="Enter 6-digit OTP"
-                    value={formData.otp}
-                    onChange={(e) => setFormData({ ...formData, otp: e.target.value })}
-                    className="pl-10 h-12 text-center text-xl tracking-widest"
-                    maxLength={6}
-                    required
-                  />
-                </div>
-              </div>
-
               <Button type="submit" variant="hero" size="lg" className="w-full" disabled={isLoading}>
                 {isLoading ? (
                   <span className="flex items-center gap-2">
@@ -267,6 +247,15 @@ export default function Signup() {
                     <IconArrowRight className="w-5 h-5" />
                   </span>
                 )}
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full mt-2"
+                onClick={() => setStep('info')}
+              >
+                Back
               </Button>
             </form>
           )}
