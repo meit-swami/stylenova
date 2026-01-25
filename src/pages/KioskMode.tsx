@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IconSparkles, IconHeart, IconX, IconLoader2 } from '@tabler/icons-react';
@@ -6,11 +6,14 @@ import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { useStore } from '@/hooks/useDatabase';
 import { useProductsWithDetails } from '@/hooks/useProducts';
+import { useKioskWishlist } from '@/hooks/useKioskWishlist';
 import { KioskWelcome } from '@/components/kiosk/KioskWelcome';
 import { KioskCamera } from '@/components/kiosk/KioskCamera';
 import { KioskSuggestions } from '@/components/kiosk/KioskSuggestions';
 import { KioskTryOn } from '@/components/kiosk/KioskTryOn';
 import { KioskWishlist } from '@/components/kiosk/KioskWishlist';
+import { KioskCustomerForm } from '@/components/kiosk/KioskCustomerForm';
+import { KioskQRDisplay } from '@/components/kiosk/KioskQRDisplay';
 
 const aiComments = {
   english: "Wow! Based on your warm skin tone and elegant style, I've picked some beautiful pieces that would complement you perfectly! 🌟",
@@ -18,7 +21,7 @@ const aiComments = {
   hinglish: "Wow! Aapki warm skin tone aur elegant style ke basis par, maine kuch beautiful pieces choose kiye hain jo aap par perfect lagenge! 🌟",
 };
 
-type Step = 'welcome' | 'capture' | 'suggestions' | 'tryon' | 'wishlist';
+type Step = 'welcome' | 'capture' | 'suggestions' | 'tryon' | 'wishlist' | 'customer-form' | 'qr-display';
 
 interface KioskProduct {
   id: string;
@@ -26,13 +29,7 @@ interface KioskProduct {
   price: number;
   image: string;
   matchScore?: number;
-}
-
-interface WishlistItem {
-  id: string;
-  name: string;
-  price: number;
-  image: string;
+  productId?: string;
 }
 
 export default function KioskMode() {
@@ -41,13 +38,27 @@ export default function KioskMode() {
   const { data: store, isLoading: storeLoading } = useStore(user?.id);
   const { data: rawProducts, isLoading: productsLoading } = useProductsWithDetails(store?.id);
 
+  const {
+    wishlist,
+    customerInfo,
+    sessionId,
+    isCreatingSession,
+    isSavingWishlist,
+    addToWishlist,
+    removeFromWishlist,
+    clearWishlist,
+    setCustomerInfo,
+    initSession,
+    saveCurrentWishlist,
+  } = useKioskWishlist(store?.id);
+
   const [step, setStep] = useState<Step>('welcome');
   const [language, setLanguage] = useState<'english' | 'hindi' | 'hinglish'>('hinglish');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<KioskProduct | null>(null);
   const [selectedProductIndex, setSelectedProductIndex] = useState(0);
-  const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
   const [lightMode, setLightMode] = useState(false);
+  const [savedWishlistUrl, setSavedWishlistUrl] = useState<string | null>(null);
 
   // Transform database products to kiosk format with random match scores
   const products: KioskProduct[] = useMemo(() => {
@@ -57,24 +68,29 @@ export default function KioskMode() {
       .filter(p => p.is_active && p.enable_tryon)
       .map(product => ({
         id: product.id,
+        productId: product.id,
         name: product.name,
         price: product.sale_price || product.base_price,
         image: product.images?.[0] || '',
-        matchScore: Math.floor(Math.random() * 25) + 75, // Random 75-100% match score for demo
+        matchScore: Math.floor(Math.random() * 25) + 75,
       }))
       .sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))
-      .slice(0, 12); // Show top 12 products
+      .slice(0, 12);
   }, [rawProducts]);
 
-  const handleCapture = useCallback((imageData: string) => {
+  const handleCapture = useCallback(async (imageData: string) => {
     setCapturedImage(imageData);
+    
+    // Initialize session when photo is captured
+    await initSession(imageData);
+    
     setStep('suggestions');
     toast.success(
       language === 'english' ? 'Photo captured! Analyzing...' :
       language === 'hindi' ? 'फोटो कैप्चर हुई! विश्लेषण हो रहा है...' :
       'Photo capture ho gayi! Analyzing...'
     );
-  }, [language]);
+  }, [language, initSession]);
 
   const handleSelectProduct = useCallback((product: KioskProduct) => {
     setSelectedProduct(product);
@@ -101,24 +117,25 @@ export default function KioskMode() {
       return;
     }
 
-    setWishlist(prev => [...prev, {
+    addToWishlist({
       id: selectedProduct.id,
+      productId: selectedProduct.productId,
       name: selectedProduct.name,
       price: selectedProduct.price,
       image: selectedProduct.image,
-    }]);
+    });
     
     toast.success(
       language === 'english' ? 'Added to wishlist! ❤️' :
       language === 'hindi' ? 'विशलिस्ट में जोड़ा गया! ❤️' :
       'Wishlist mein add ho gaya! ❤️'
     );
-  }, [selectedProduct, wishlist, language]);
+  }, [selectedProduct, wishlist, language, addToWishlist]);
 
   const handleRemoveFromWishlist = useCallback((id: string) => {
-    setWishlist(prev => prev.filter(item => item.id !== id));
+    removeFromWishlist(id);
     toast.success('Removed from wishlist');
-  }, []);
+  }, [removeFromWishlist]);
 
   const handleShare = useCallback(() => {
     toast.success(
@@ -129,16 +146,39 @@ export default function KioskMode() {
   }, [language]);
 
   const handleGenerateQR = useCallback(() => {
-    toast.success(
-      language === 'english' ? 'QR Code generated! Check your phone.' :
-      language === 'hindi' ? 'QR कोड बन गया! अपना फोन चेक करें।' :
-      'QR Code ban gaya! Apna phone check karo.'
-    );
-  }, [language]);
+    // Navigate to customer form to collect info before saving
+    setStep('customer-form');
+  }, []);
+
+  const handleCustomerSubmit = useCallback(async (name: string, phone: string) => {
+    setCustomerInfo({ name, phone });
+    
+    // Ensure we have a session
+    if (!sessionId && store?.id) {
+      await initSession(capturedImage || undefined);
+    }
+
+    // Save wishlist
+    const result = await saveCurrentWishlist();
+    
+    if (result?.share_url) {
+      setSavedWishlistUrl(result.share_url);
+      setStep('qr-display');
+    }
+  }, [sessionId, store?.id, capturedImage, initSession, setCustomerInfo, saveCurrentWishlist]);
+
+  const handleNewSession = useCallback(() => {
+    // Reset everything for a new customer
+    clearWishlist();
+    setCapturedImage(null);
+    setSelectedProduct(null);
+    setSelectedProductIndex(0);
+    setSavedWishlistUrl(null);
+    setStep('welcome');
+  }, [clearWishlist]);
 
   const isLoading = storeLoading || productsLoading;
 
-  // Show loading state
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-center">
@@ -265,6 +305,26 @@ export default function KioskMode() {
               onRemoveItem={handleRemoveFromWishlist}
               onBack={() => setStep('suggestions')}
               onGenerateQR={handleGenerateQR}
+              language={language}
+            />
+          )}
+
+          {step === 'customer-form' && (
+            <KioskCustomerForm
+              onSubmit={handleCustomerSubmit}
+              onBack={() => setStep('wishlist')}
+              language={language}
+              isLoading={isCreatingSession || isSavingWishlist}
+            />
+          )}
+
+          {step === 'qr-display' && savedWishlistUrl && (
+            <KioskQRDisplay
+              shareUrl={savedWishlistUrl}
+              customerName={customerInfo.name}
+              itemCount={wishlist.length}
+              onBack={() => setStep('wishlist')}
+              onNewSession={handleNewSession}
               language={language}
             />
           )}

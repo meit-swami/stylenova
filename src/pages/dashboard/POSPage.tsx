@@ -1,11 +1,13 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { IconReceipt, IconUser } from '@tabler/icons-react';
+import { IconReceipt, IconUser, IconLoader2 } from '@tabler/icons-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { usePOS } from '@/hooks/usePOS';
 import { useAuth } from '@/hooks/useAuth';
+import { useStore } from '@/hooks/useDatabase';
+import { useProductsWithDetails } from '@/hooks/useProducts';
 import { POSCart } from '@/components/pos/POSCart';
 import { POSCheckout } from '@/components/pos/POSCheckout';
 import { POSSearch } from '@/components/pos/POSSearch';
@@ -13,17 +15,10 @@ import { POSQuickAdd } from '@/components/pos/POSQuickAdd';
 import { POSReceipt } from '@/components/pos/POSReceipt';
 import { toast } from 'sonner';
 
-// Quick add sample products
-const quickProducts = [
-  { id: 'q1', name: 'Silk Dupatta', price: 899, emoji: '🧣' },
-  { id: 'q2', name: 'Bangles Set', price: 499, emoji: '💍' },
-  { id: 'q3', name: 'Clutch Bag', price: 1299, emoji: '👜' },
-  { id: 'q4', name: 'Hair Clips', price: 199, emoji: '🎀' },
-  { id: 'q5', name: 'Earrings', price: 349, emoji: '✨' },
-];
-
 export default function POSPage() {
   const { user } = useAuth();
+  const { data: store, isLoading: storeLoading } = useStore(user?.id);
+  const { data: products, isLoading: productsLoading } = useProductsWithDetails(store?.id);
   const receiptRef = useRef<HTMLDivElement>(null);
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastSale, setLastSale] = useState<{
@@ -49,10 +44,27 @@ export default function POSPage() {
     setDiscount,
     setCustomerInfo,
     completeSale,
+    clearCart,
   } = usePOS();
 
-  // Demo store ID - in production this would come from user's store
-  const storeId = 'demo-store-id';
+  // Transform products into quick add items (top 5 popular/recent)
+  const quickProducts = useMemo(() => {
+    if (!products) return [];
+    
+    return products
+      .filter(p => p.is_active)
+      .slice(0, 5)
+      .map(product => ({
+        id: product.id,
+        productId: product.id,
+        name: product.name.length > 20 ? product.name.slice(0, 20) + '...' : product.name,
+        price: product.sale_price || product.base_price,
+        emoji: '👗',
+        sku: product.sku,
+        image: product.images?.[0],
+        variantId: product.variants?.[0]?.id,
+      }));
+  }, [products]);
 
   const handleAddToCart = useCallback((item: Parameters<typeof addToCart>[0]) => {
     addToCart(item);
@@ -61,37 +73,40 @@ export default function POSPage() {
 
   const handleQuickAdd = useCallback((product: typeof quickProducts[0]) => {
     addToCart({
-      id: product.id,
+      id: product.variantId ? `${product.id}-${product.variantId}` : product.id,
       productId: product.id,
+      variantId: product.variantId,
       name: product.name,
-      sku: `QA-${product.id}`,
+      sku: product.sku,
       price: product.price,
+      image: product.image,
     });
     toast.success(`Added ${product.name}`);
   }, [addToCart]);
 
   const handleCompleteSale = useCallback(async (method: 'cash' | 'card' | 'upi') => {
-    // For demo, simulate the sale without database
-    const orderNumber = `ORD-${Date.now().toString().slice(-8)}`;
-    
-    setLastSale({
-      orderNumber,
-      items: cart.map(item => ({
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price,
-        total: item.price * item.quantity,
-      })),
-      total,
-      paymentMethod: method,
-    });
+    if (!store?.id) {
+      toast.error('Store not found');
+      return;
+    }
 
-    toast.success(`Sale completed! Order: ${orderNumber}`);
-    setShowReceipt(true);
+    const result = await completeSale(method, store.id);
     
-    // Clear cart after showing receipt
-    // In production, use: await completeSale(method, storeId);
-  }, [cart, total]);
+    if (result) {
+      setLastSale({
+        orderNumber: result.orderNumber,
+        items: result.items.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          total: item.price * item.quantity,
+        })),
+        total: result.total,
+        paymentMethod: method,
+      });
+      setShowReceipt(true);
+    }
+  }, [store?.id, completeSale]);
 
   const handlePrintReceipt = useCallback(() => {
     if (!receiptRef.current) return;
@@ -120,6 +135,34 @@ export default function POSPage() {
     printWindow.print();
   }, []);
 
+  const handleCloseReceipt = useCallback(() => {
+    setShowReceipt(false);
+    clearCart();
+  }, [clearCart]);
+
+  const isLoading = storeLoading || productsLoading;
+
+  if (isLoading) {
+    return (
+      <div className="h-[calc(100vh-8rem)] flex items-center justify-center">
+        <div className="text-center">
+          <IconLoader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-primary" />
+          <p className="text-muted-foreground">Loading POS...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!store) {
+    return (
+      <div className="h-[calc(100vh-8rem)] flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Please set up your store first</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -130,10 +173,12 @@ export default function POSPage() {
         {/* Left Panel - Products & Cart */}
         <div className="lg:col-span-2 flex flex-col gap-4">
           {/* Search */}
-          <POSSearch storeId={storeId} onAddToCart={handleAddToCart} />
+          <POSSearch storeId={store.id} onAddToCart={handleAddToCart} />
 
           {/* Quick Products */}
-          <POSQuickAdd products={quickProducts} onAdd={handleQuickAdd} />
+          {quickProducts.length > 0 && (
+            <POSQuickAdd products={quickProducts} onAdd={handleQuickAdd} />
+          )}
 
           {/* Customer Info (Collapsible) */}
           <div className="bg-card rounded-xl border border-border p-3 md:p-4">
@@ -223,9 +268,9 @@ export default function POSPage() {
               <POSReceipt
                 ref={receiptRef}
                 orderNumber={lastSale.orderNumber}
-                storeName="StyleNova ✨"
-                storeAddress="Fashion District, Mumbai"
-                gstNumber="27AABCU9603R1ZM"
+                storeName={store.brand_name || store.name}
+                storeAddress={store.address || 'Address not set'}
+                gstNumber={store.gst_number || 'GST not set'}
                 items={lastSale.items}
                 subtotal={subtotal}
                 discount={discount}
@@ -247,10 +292,10 @@ export default function POSPage() {
                   Print Receipt
                 </button>
                 <button
-                  onClick={() => setShowReceipt(false)}
+                  onClick={handleCloseReceipt}
                   className="flex-1 py-2 bg-muted text-foreground rounded-lg font-medium hover:bg-muted/80 transition-colors"
                 >
-                  Close
+                  Close & Clear
                 </button>
               </div>
             </>
