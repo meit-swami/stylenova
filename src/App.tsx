@@ -3,10 +3,13 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/hooks/useAuth";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import KioskMode from "./pages/KioskMode";
+import PublicWishlist from "./pages/PublicWishlist";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
 import DashboardHome from "./pages/dashboard/DashboardHome";
 import InventoryPage from "./pages/dashboard/InventoryPage";
@@ -23,30 +26,45 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/kiosk" element={<KioskMode />} />
-          <Route path="/dashboard" element={<DashboardLayout />}>
-            <Route index element={<DashboardHome />} />
-            <Route path="inventory" element={<InventoryPage />} />
-            <Route path="try-on" element={<TryOnPage />} />
-            <Route path="pos" element={<POSPage />} />
-            <Route path="staff" element={<StaffPage />} />
-            <Route path="analytics" element={<AnalyticsPage />} />
-            <Route path="store" element={<StoreProfilePage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="superadmin" element={<SuperadminDashboard />} />
-          </Route>
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/wishlist/:wishlistId" element={<PublicWishlist />} />
+            
+            {/* Protected Routes */}
+            <Route path="/kiosk" element={
+              <ProtectedRoute>
+                <KioskMode />
+              </ProtectedRoute>
+            } />
+            <Route path="/dashboard" element={
+              <ProtectedRoute>
+                <DashboardLayout />
+              </ProtectedRoute>
+            }>
+              <Route index element={<DashboardHome />} />
+              <Route path="inventory" element={<InventoryPage />} />
+              <Route path="try-on" element={<TryOnPage />} />
+              <Route path="pos" element={<POSPage />} />
+              <Route path="staff" element={<StaffPage />} />
+              <Route path="analytics" element={<AnalyticsPage />} />
+              <Route path="store" element={<StoreProfilePage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="superadmin" element={<SuperadminDashboard />} />
+            </Route>
+            
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 
