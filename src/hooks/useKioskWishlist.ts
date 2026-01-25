@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useSMSNotification } from './useSMSNotification';
 import { toast } from 'sonner';
 
 interface WishlistItem {
@@ -24,10 +25,11 @@ interface SaveWishlistParams {
   items: WishlistItem[];
 }
 
-export function useKioskWishlist(storeId: string | undefined) {
+export function useKioskWishlist(storeId: string | undefined, storeName?: string) {
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({ name: '', phone: '' });
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const { sendWishlistSMS } = useSMSNotification();
 
   // Create a try-on session
   const createSession = useMutation({
@@ -109,10 +111,21 @@ export function useKioskWishlist(storeId: string | undefined) {
         .update({ share_url: shareUrl })
         .eq('id', wishlistRecord.id);
 
-      return { ...wishlistRecord, share_url: shareUrl };
+      return { ...wishlistRecord, share_url: shareUrl, customerName: params.customerName, customerPhone: params.customerPhone };
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       toast.success('Wishlist saved successfully!');
+      
+      // Send SMS notification with the wishlist link
+      if (data.share_url && data.customerPhone) {
+        await sendWishlistSMS(
+          data.customerPhone,
+          data.customerName,
+          data.share_url,
+          storeName || 'StyleNova'
+        );
+      }
+      
       return data;
     },
     onError: (error: any) => {
