@@ -807,6 +807,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_low_stock_items: {
+        Args: { p_store_id: string }
+        Returns: {
+          color: string
+          low_stock_threshold: number
+          product_name: string
+          size: string
+          sku: string
+          stock_quantity: number
+          suggested_reorder_qty: number
+          variant_id: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["user_role"]
