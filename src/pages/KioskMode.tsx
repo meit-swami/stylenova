@@ -50,7 +50,7 @@ export default function KioskMode() {
     setCustomerInfo,
     initSession,
     saveCurrentWishlist,
-  } = useKioskWishlist(store?.id);
+  } = useKioskWishlist(store?.id, store?.brand_name || store?.name);
 
   const [step, setStep] = useState<Step>('welcome');
   const [language, setLanguage] = useState<'english' | 'hindi' | 'hinglish'>('hinglish');

@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { IconSearch, IconBarcode } from '@tabler/icons-react';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { usePOS } from '@/hooks/usePOS';
+import { BarcodeScanner } from './BarcodeScanner';
 
 interface Product {
   id: string;
@@ -39,6 +41,7 @@ export function POSSearch({ storeId, onAddToCart }: POSSearchProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Product[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   const { searchProducts } = usePOS();
 
   useEffect(() => {
@@ -79,18 +82,60 @@ export function POSSearch({ storeId, onAddToCart }: POSSearchProps) {
     setResults([]);
   };
 
+  const handleBarcodeScan = async (barcode: string) => {
+    setQuery(barcode);
+    setIsSearching(true);
+    
+    // Search by the scanned barcode (SKU)
+    const data = await searchProducts(barcode, storeId);
+    
+    if (data.length === 1) {
+      // If exactly one product found, add it directly
+      const product = data[0];
+      if (product.product_variants && product.product_variants.length === 1) {
+        handleSelectProduct(product, product.product_variants[0]);
+      } else if (!product.product_variants || product.product_variants.length === 0) {
+        handleSelectProduct(product);
+      } else {
+        // Multiple variants, show in results
+        setResults(data);
+      }
+    } else {
+      setResults(data);
+    }
+    
+    setIsSearching(false);
+  };
+
   return (
     <div className="relative">
-      <div className="relative">
-        <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-        <Input
-          placeholder="Scan barcode or search products..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="pl-10 pr-10 h-11 md:h-12 text-base md:text-lg"
-        />
-        <IconBarcode className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+      <div className="relative flex gap-2">
+        <div className="relative flex-1">
+          <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+          <Input
+            placeholder="Search by name or SKU..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-10 h-11 md:h-12 text-base md:text-lg"
+          />
+        </div>
+        <Button
+          variant="outline"
+          size="lg"
+          onClick={() => setShowScanner(true)}
+          className="h-11 md:h-12 px-4"
+        >
+          <IconBarcode className="w-5 h-5" />
+          <span className="hidden sm:inline ml-2">Scan</span>
+        </Button>
       </div>
+
+      {/* Barcode Scanner Dialog */}
+      <BarcodeScanner
+        isOpen={showScanner}
+        onClose={() => setShowScanner(false)}
+        onScan={handleBarcodeScan}
+      />
 
       {/* Search Results Dropdown */}
       {results.length > 0 && (
