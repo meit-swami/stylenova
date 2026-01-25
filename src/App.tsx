@@ -12,6 +12,10 @@ import DashboardHome from "./pages/dashboard/DashboardHome";
 import InventoryPage from "./pages/dashboard/InventoryPage";
 import TryOnPage from "./pages/dashboard/TryOnPage";
 import POSPage from "./pages/dashboard/POSPage";
+import StaffPage from "./pages/dashboard/StaffPage";
+import AnalyticsPage from "./pages/dashboard/AnalyticsPage";
+import StoreProfilePage from "./pages/dashboard/StoreProfilePage";
+import SettingsPage from "./pages/dashboard/SettingsPage";
 import SuperadminDashboard from "./pages/dashboard/SuperadminDashboard";
 import NotFound from "./pages/NotFound";
 
@@ -33,6 +37,10 @@ const App = () => (
             <Route path="inventory" element={<InventoryPage />} />
             <Route path="try-on" element={<TryOnPage />} />
             <Route path="pos" element={<POSPage />} />
+            <Route path="staff" element={<StaffPage />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="store" element={<StoreProfilePage />} />
+            <Route path="settings" element={<SettingsPage />} />
             <Route path="superadmin" element={<SuperadminDashboard />} />
           </Route>
           <Route path="*" element={<NotFound />} />
