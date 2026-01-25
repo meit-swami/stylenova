@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   IconCamera, 
@@ -34,6 +35,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export default function TryOnPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { data: store } = useStore(user?.id);
   const { data: products } = useProductsWithDetails(store?.id);
@@ -192,7 +194,7 @@ export default function TryOnPage() {
             <IconRefresh className="w-4 h-4" />
             New Session
           </Button>
-          <Button variant="gold" onClick={() => window.open('/kiosk', '_blank')}>
+          <Button variant="gold" onClick={() => navigate('/kiosk')}>
             <IconPlayerPlay className="w-4 h-4" />
             Launch Kiosk
           </Button>
