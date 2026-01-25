@@ -1,63 +1,124 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  IconPlus, 
-  IconMinus, 
-  IconTrash, 
-  IconSearch,
-  IconReceipt,
-  IconCash,
-  IconCreditCard,
-  IconQrcode,
-  IconPrinter,
-  IconDiscount
-} from '@tabler/icons-react';
-import { Button } from '@/components/ui/button';
+import { IconReceipt, IconUser } from '@tabler/icons-react';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { usePOS } from '@/hooks/usePOS';
+import { useAuth } from '@/hooks/useAuth';
+import { POSCart } from '@/components/pos/POSCart';
+import { POSCheckout } from '@/components/pos/POSCheckout';
+import { POSSearch } from '@/components/pos/POSSearch';
+import { POSQuickAdd } from '@/components/pos/POSQuickAdd';
+import { POSReceipt } from '@/components/pos/POSReceipt';
+import { toast } from 'sonner';
 
-const cartItems = [
-  { id: 1, name: 'Silk Saree - Royal Blue', price: 4599, qty: 1, image: '🥻' },
-  { id: 2, name: 'Gold Necklace - Temple', price: 24999, qty: 1, image: '📿' },
-  { id: 3, name: 'Embroidered Kurti', price: 1299, qty: 2, image: '👚' },
-];
-
+// Quick add sample products
 const quickProducts = [
-  { id: 101, name: 'Silk Dupatta', price: 899, image: '🧣' },
-  { id: 102, name: 'Bangles Set', price: 499, image: '💍' },
-  { id: 103, name: 'Clutch Bag', price: 1299, image: '👜' },
-  { id: 104, name: 'Hair Clips', price: 199, image: '🎀' },
+  { id: 'q1', name: 'Silk Dupatta', price: 899, emoji: '🧣' },
+  { id: 'q2', name: 'Bangles Set', price: 499, emoji: '💍' },
+  { id: 'q3', name: 'Clutch Bag', price: 1299, emoji: '👜' },
+  { id: 'q4', name: 'Hair Clips', price: 199, emoji: '🎀' },
+  { id: 'q5', name: 'Earrings', price: 349, emoji: '✨' },
 ];
 
 export default function POSPage() {
-  const [cart, setCart] = useState(cartItems);
-  const [discount, setDiscount] = useState(0);
-  const [searchQuery, setSearchQuery] = useState('');
+  const { user } = useAuth();
+  const receiptRef = useRef<HTMLDivElement>(null);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [lastSale, setLastSale] = useState<{
+    orderNumber: string;
+    items: any[];
+    total: number;
+    paymentMethod: string;
+  } | null>(null);
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-  const discountAmount = (subtotal * discount) / 100;
-  const tax = (subtotal - discountAmount) * 0.18; // 18% GST
-  const total = subtotal - discountAmount + tax;
+  const {
+    cart,
+    discount,
+    customerInfo,
+    isProcessing,
+    subtotal,
+    discountAmount,
+    taxAmount,
+    total,
+    TAX_RATE,
+    addToCart,
+    updateQuantity,
+    removeFromCart,
+    setDiscount,
+    setCustomerInfo,
+    completeSale,
+  } = usePOS();
 
-  const updateQty = (id: number, change: number) => {
-    setCart(cart.map(item => 
-      item.id === id 
-        ? { ...item, qty: Math.max(1, item.qty + change) }
-        : item
-    ));
-  };
+  // Demo store ID - in production this would come from user's store
+  const storeId = 'demo-store-id';
 
-  const removeItem = (id: number) => {
-    setCart(cart.filter(item => item.id !== id));
-  };
+  const handleAddToCart = useCallback((item: Parameters<typeof addToCart>[0]) => {
+    addToCart(item);
+    toast.success(`Added ${item.name} to cart`);
+  }, [addToCart]);
 
-  const addQuickProduct = (product: typeof quickProducts[0]) => {
-    const existing = cart.find(item => item.id === product.id);
-    if (existing) {
-      updateQty(product.id, 1);
-    } else {
-      setCart([...cart, { ...product, qty: 1 }]);
+  const handleQuickAdd = useCallback((product: typeof quickProducts[0]) => {
+    addToCart({
+      id: product.id,
+      productId: product.id,
+      name: product.name,
+      sku: `QA-${product.id}`,
+      price: product.price,
+    });
+    toast.success(`Added ${product.name}`);
+  }, [addToCart]);
+
+  const handleCompleteSale = useCallback(async (method: 'cash' | 'card' | 'upi') => {
+    // For demo, simulate the sale without database
+    const orderNumber = `ORD-${Date.now().toString().slice(-8)}`;
+    
+    setLastSale({
+      orderNumber,
+      items: cart.map(item => ({
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.price * item.quantity,
+      })),
+      total,
+      paymentMethod: method,
+    });
+
+    toast.success(`Sale completed! Order: ${orderNumber}`);
+    setShowReceipt(true);
+    
+    // Clear cart after showing receipt
+    // In production, use: await completeSale(method, storeId);
+  }, [cart, total]);
+
+  const handlePrintReceipt = useCallback(() => {
+    if (!receiptRef.current) return;
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Please allow popups to print receipt');
+      return;
     }
-  };
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Receipt</title>
+          <style>
+            body { font-family: monospace; padding: 20px; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+          </style>
+        </head>
+        <body>
+          ${receiptRef.current.innerHTML}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  }, []);
 
   return (
     <motion.div
@@ -65,186 +126,137 @@ export default function POSPage() {
       animate={{ opacity: 1 }}
       className="h-[calc(100vh-8rem)]"
     >
-      <div className="grid lg:grid-cols-3 gap-6 h-full">
-        {/* Left Panel - Products */}
-        <div className="lg:col-span-2 flex flex-col">
+      <div className="grid lg:grid-cols-3 gap-4 md:gap-6 h-full">
+        {/* Left Panel - Products & Cart */}
+        <div className="lg:col-span-2 flex flex-col gap-4">
           {/* Search */}
-          <div className="mb-4">
-            <div className="relative">
-              <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <Input
-                placeholder="Scan barcode or search products..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 h-12 text-lg"
-              />
-            </div>
-          </div>
+          <POSSearch storeId={storeId} onAddToCart={handleAddToCart} />
 
           {/* Quick Products */}
-          <div className="mb-6">
-            <h3 className="font-medium text-muted-foreground text-sm mb-3">Quick Add</h3>
-            <div className="flex gap-3 overflow-x-auto pb-2">
-              {quickProducts.map((product) => (
-                <button
-                  key={product.id}
-                  onClick={() => addQuickProduct(product)}
-                  className="flex-shrink-0 w-28 p-3 bg-card rounded-xl border border-border hover:border-primary transition-colors text-center"
-                >
-                  <div className="text-2xl mb-1">{product.image}</div>
-                  <p className="text-xs font-medium text-foreground truncate">{product.name}</p>
-                  <p className="text-xs text-muted-foreground">₹{product.price}</p>
-                </button>
-              ))}
+          <POSQuickAdd products={quickProducts} onAdd={handleQuickAdd} />
+
+          {/* Customer Info (Collapsible) */}
+          <div className="bg-card rounded-xl border border-border p-3 md:p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <IconUser className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">Customer (Optional)</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="customerName" className="text-xs">Name</Label>
+                <Input
+                  id="customerName"
+                  placeholder="Customer name"
+                  value={customerInfo.name}
+                  onChange={(e) => setCustomerInfo({ ...customerInfo, name: e.target.value })}
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div>
+                <Label htmlFor="customerPhone" className="text-xs">Phone</Label>
+                <Input
+                  id="customerPhone"
+                  placeholder="Phone number"
+                  value={customerInfo.phone}
+                  onChange={(e) => setCustomerInfo({ ...customerInfo, phone: e.target.value })}
+                  className="h-9 text-sm"
+                />
+              </div>
             </div>
           </div>
 
           {/* Cart Items */}
-          <div className="flex-1 bg-card rounded-2xl border border-border overflow-hidden">
-            <div className="p-4 border-b border-border">
-              <h2 className="font-display text-lg font-semibold text-foreground">
+          <div className="flex-1 bg-card rounded-2xl border border-border overflow-hidden flex flex-col">
+            <div className="p-3 md:p-4 border-b border-border flex items-center justify-between">
+              <h2 className="font-display text-base md:text-lg font-semibold text-foreground flex items-center gap-2">
+                <IconReceipt className="w-5 h-5" />
                 Current Order
               </h2>
+              <span className="text-sm text-muted-foreground">
+                {cart.length} item{cart.length !== 1 ? 's' : ''}
+              </span>
             </div>
-            
-            <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar">
-              {cart.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <IconReceipt className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No items in cart</p>
-                  <p className="text-sm">Scan barcode or search to add products</p>
-                </div>
-              ) : (
-                cart.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-4 p-3 rounded-xl bg-muted/50"
-                  >
-                    <div className="text-3xl">{item.image}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-foreground truncate">{item.name}</p>
-                      <p className="text-sm text-muted-foreground">₹{item.price.toLocaleString()}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => updateQty(item.id, -1)}
-                        className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center hover:bg-muted-foreground/20 transition-colors"
-                      >
-                        <IconMinus className="w-4 h-4" />
-                      </button>
-                      <span className="w-8 text-center font-medium">{item.qty}</span>
-                      <button
-                        onClick={() => updateQty(item.id, 1)}
-                        className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center hover:bg-muted-foreground/20 transition-colors"
-                      >
-                        <IconPlus className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <div className="text-right min-w-20">
-                      <p className="font-semibold text-foreground">
-                        ₹{(item.price * item.qty).toLocaleString()}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => removeItem(item.id)}
-                      className="p-2 rounded-lg hover:bg-destructive/10 transition-colors"
-                    >
-                      <IconTrash className="w-4 h-4 text-destructive" />
-                    </button>
-                  </div>
-                ))
-              )}
+
+            <div className="flex-1 p-3 md:p-4 overflow-y-auto custom-scrollbar">
+              <POSCart
+                items={cart}
+                onUpdateQuantity={updateQuantity}
+                onRemoveItem={removeFromCart}
+              />
             </div>
           </div>
         </div>
 
         {/* Right Panel - Checkout */}
         <div className="flex flex-col">
-          <div className="bg-card rounded-2xl border border-border flex-1 flex flex-col">
-            <div className="p-6 border-b border-border">
-              <h2 className="font-display text-lg font-semibold text-foreground">
-                Order Summary
-              </h2>
-            </div>
-
-            <div className="p-6 flex-1">
-              {/* Discount */}
-              <div className="mb-6">
-                <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                  Discount
-                </label>
-                <div className="flex gap-2">
-                  {[0, 5, 10, 15].map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => setDiscount(d)}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        discount === d
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted text-muted-foreground hover:bg-muted-foreground/20'
-                      }`}
-                    >
-                      {d}%
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Totals */}
-              <div className="space-y-3">
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Subtotal</span>
-                  <span>₹{subtotal.toLocaleString()}</span>
-                </div>
-                {discount > 0 && (
-                  <div className="flex justify-between text-success">
-                    <span>Discount ({discount}%)</span>
-                    <span>-₹{discountAmount.toLocaleString()}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-muted-foreground">
-                  <span>GST (18%)</span>
-                  <span>₹{tax.toLocaleString()}</span>
-                </div>
-                <hr className="border-border" />
-                <div className="flex justify-between text-xl font-bold text-foreground">
-                  <span>Total</span>
-                  <span>₹{total.toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Payment Methods */}
-            <div className="p-6 border-t border-border space-y-3">
-              <h3 className="font-medium text-muted-foreground text-sm mb-3">Payment Method</h3>
-              <div className="grid grid-cols-3 gap-2">
-                <Button variant="outline" className="flex-col h-auto py-4">
-                  <IconCash className="w-6 h-6 mb-1" />
-                  <span className="text-xs">Cash</span>
-                </Button>
-                <Button variant="outline" className="flex-col h-auto py-4">
-                  <IconCreditCard className="w-6 h-6 mb-1" />
-                  <span className="text-xs">Card</span>
-                </Button>
-                <Button variant="outline" className="flex-col h-auto py-4">
-                  <IconQrcode className="w-6 h-6 mb-1" />
-                  <span className="text-xs">UPI</span>
-                </Button>
-              </div>
-              
-              <Button variant="hero" size="xl" className="w-full" disabled={cart.length === 0}>
-                <IconReceipt className="w-5 h-5" />
-                Complete Sale
-              </Button>
-              
-              <Button variant="outline" className="w-full" disabled={cart.length === 0}>
-                <IconPrinter className="w-4 h-4" />
-                Print Receipt
-              </Button>
-            </div>
-          </div>
+          <POSCheckout
+            subtotal={subtotal}
+            discount={discount}
+            discountAmount={discountAmount}
+            taxRate={TAX_RATE}
+            taxAmount={taxAmount}
+            total={total}
+            cartItemCount={cart.length}
+            isProcessing={isProcessing}
+            onDiscountChange={setDiscount}
+            onCompleteSale={handleCompleteSale}
+            onPrintReceipt={() => {
+              if (lastSale) {
+                setShowReceipt(true);
+              } else {
+                toast.info('Complete a sale first to print receipt');
+              }
+            }}
+          />
         </div>
       </div>
+
+      {/* Receipt Dialog */}
+      <Dialog open={showReceipt} onOpenChange={setShowReceipt}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Receipt</DialogTitle>
+          </DialogHeader>
+          
+          {lastSale && (
+            <>
+              <POSReceipt
+                ref={receiptRef}
+                orderNumber={lastSale.orderNumber}
+                storeName="StyleNova ✨"
+                storeAddress="Fashion District, Mumbai"
+                gstNumber="27AABCU9603R1ZM"
+                items={lastSale.items}
+                subtotal={subtotal}
+                discount={discount}
+                discountAmount={discountAmount}
+                taxRate={TAX_RATE}
+                taxAmount={taxAmount}
+                total={lastSale.total}
+                paymentMethod={lastSale.paymentMethod}
+                customerName={customerInfo.name}
+                customerPhone={customerInfo.phone}
+                date={new Date()}
+              />
+              
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={handlePrintReceipt}
+                  className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90 transition-opacity"
+                >
+                  Print Receipt
+                </button>
+                <button
+                  onClick={() => setShowReceipt(false)}
+                  className="flex-1 py-2 bg-muted text-foreground rounded-lg font-medium hover:bg-muted/80 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }
