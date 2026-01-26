@@ -20,6 +20,7 @@ import AnalyticsPage from "./pages/dashboard/AnalyticsPage";
 import StoreProfilePage from "./pages/dashboard/StoreProfilePage";
 import SettingsPage from "./pages/dashboard/SettingsPage";
 import SuperadminDashboard from "./pages/dashboard/SuperadminDashboard";
+import OrderHistory from "./pages/OrderHistory";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,6 +38,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/wishlist/:wishlistId" element={<PublicWishlist />} />
+            <Route path="/order-history" element={<OrderHistory />} />
             
             {/* Protected Routes */}
             <Route path="/kiosk" element={

@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
 import { format } from 'date-fns';
+import { ReceiptQRCode } from './ReceiptQRCode';
 
 interface ReceiptItem {
   name: string;
@@ -12,11 +13,15 @@ interface ReceiptProps {
   orderNumber: string;
   storeName: string;
   storeAddress?: string;
+  storeId?: string;
   gstNumber?: string;
   items: ReceiptItem[];
   subtotal: number;
   discount: number;
   discountAmount: number;
+  loyaltyDiscount?: number;
+  loyaltyPointsEarned?: number;
+  loyaltyPointsRedeemed?: number;
   taxRate: number;
   taxAmount: number;
   total: number;
@@ -30,11 +35,15 @@ export const POSReceipt = forwardRef<HTMLDivElement, ReceiptProps>(({
   orderNumber,
   storeName,
   storeAddress,
+  storeId,
   gstNumber,
   items,
   subtotal,
   discount,
   discountAmount,
+  loyaltyDiscount = 0,
+  loyaltyPointsEarned = 0,
+  loyaltyPointsRedeemed = 0,
   taxRate,
   taxAmount,
   total,
@@ -112,6 +121,12 @@ export const POSReceipt = forwardRef<HTMLDivElement, ReceiptProps>(({
             <span>-₹{discountAmount.toLocaleString()}</span>
           </div>
         )}
+        {loyaltyDiscount > 0 && (
+          <div className="flex justify-between text-green-700">
+            <span>Loyalty Reward:</span>
+            <span>-₹{loyaltyDiscount.toLocaleString()}</span>
+          </div>
+        )}
         <div className="flex justify-between">
           <span>GST ({(taxRate * 100).toFixed(0)}%):</span>
           <span>₹{taxAmount.toLocaleString()}</span>
@@ -124,10 +139,35 @@ export const POSReceipt = forwardRef<HTMLDivElement, ReceiptProps>(({
 
       <div className="border-b border-dashed border-black my-2" />
 
+      {/* Loyalty Points */}
+      {(loyaltyPointsEarned > 0 || loyaltyPointsRedeemed > 0) && (
+        <>
+          <div className="text-center text-xs mb-2">
+            {loyaltyPointsEarned > 0 && (
+              <p className="text-green-700 font-medium">⭐ +{loyaltyPointsEarned} loyalty points earned!</p>
+            )}
+            {loyaltyPointsRedeemed > 0 && (
+              <p className="text-orange-700">🎁 {loyaltyPointsRedeemed} points redeemed</p>
+            )}
+          </div>
+          <div className="border-b border-dashed border-black my-2" />
+        </>
+      )}
+
       {/* Payment Method */}
       <div className="text-center text-xs mb-4">
         <p>Paid via: {paymentMethod.toUpperCase()}</p>
       </div>
+
+      {/* QR Code for Purchase History */}
+      {customerPhone && storeId && (
+        <>
+          <div className="flex justify-center my-4">
+            <ReceiptQRCode phone={customerPhone} storeId={storeId} />
+          </div>
+          <div className="border-b border-dashed border-black my-2" />
+        </>
+      )}
 
       {/* Footer */}
       <div className="text-center text-xs">

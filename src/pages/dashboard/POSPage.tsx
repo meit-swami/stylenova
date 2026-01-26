@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { usePOS } from '@/hooks/usePOS';
+import { useLoyalty } from '@/hooks/useLoyalty';
 import { useAuth } from '@/hooks/useAuth';
 import { useStore } from '@/hooks/useDatabase';
 import { useProductsWithDetails } from '@/hooks/useProducts';
@@ -13,6 +14,7 @@ import { POSCheckout } from '@/components/pos/POSCheckout';
 import { POSSearch } from '@/components/pos/POSSearch';
 import { POSQuickAdd } from '@/components/pos/POSQuickAdd';
 import { POSReceipt } from '@/components/pos/POSReceipt';
+import { LoyaltyWidget } from '@/components/pos/LoyaltyWidget';
 import { toast } from 'sonner';
 
 export default function POSPage() {
@@ -21,11 +23,17 @@ export default function POSPage() {
   const { data: products, isLoading: productsLoading } = useProductsWithDetails(store?.id);
   const receiptRef = useRef<HTMLDivElement>(null);
   const [showReceipt, setShowReceipt] = useState(false);
+  const [loyaltyDiscount, setLoyaltyDiscount] = useState(0);
+  const [loyaltyPointsToRedeem, setLoyaltyPointsToRedeem] = useState(0);
+  const [pointsToEarnPreview, setPointsToEarnPreview] = useState(0);
   const [lastSale, setLastSale] = useState<{
     orderNumber: string;
     items: any[];
     total: number;
     paymentMethod: string;
+    loyaltyPointsEarned: number;
+    loyaltyPointsRedeemed: number;
+    loyaltyDiscount: number;
   } | null>(null);
 
   const {
@@ -46,6 +54,8 @@ export default function POSPage() {
     completeSale,
     clearCart,
   } = usePOS();
+
+  const { awardPoints } = useLoyalty(store?.id);
 
   // Transform products into quick add items (top 5 popular/recent)
   const quickProducts = useMemo(() => {
@@ -90,9 +100,27 @@ export default function POSPage() {
       return;
     }
 
+    // Apply loyalty discount to total
+    const finalTotal = total - loyaltyDiscount;
     const result = await completeSale(method, store.id);
     
     if (result) {
+      // Award loyalty points if customer phone provided
+      let pointsEarned = 0;
+      if (customerInfo.phone && customerInfo.phone.length >= 10) {
+        try {
+          const loyaltyResult = await awardPoints.mutateAsync({
+            phone: customerInfo.phone,
+            name: customerInfo.name || undefined,
+            orderId: result.orderId,
+            amount: finalTotal,
+          });
+          pointsEarned = loyaltyResult.pointsEarned;
+        } catch (err) {
+          console.error('Failed to award points:', err);
+        }
+      }
+
       setLastSale({
         orderNumber: result.orderNumber,
         items: result.items.map(item => ({
@@ -101,12 +129,21 @@ export default function POSPage() {
           price: item.price,
           total: item.price * item.quantity,
         })),
-        total: result.total,
+        total: finalTotal,
         paymentMethod: method,
+        loyaltyPointsEarned: pointsEarned,
+        loyaltyPointsRedeemed: loyaltyPointsToRedeem,
+        loyaltyDiscount: loyaltyDiscount,
       });
+      
+      // Reset loyalty state
+      setLoyaltyDiscount(0);
+      setLoyaltyPointsToRedeem(0);
+      setPointsToEarnPreview(0);
+      
       setShowReceipt(true);
     }
-  }, [store?.id, completeSale]);
+  }, [store?.id, completeSale, total, loyaltyDiscount, customerInfo, awardPoints, loyaltyPointsToRedeem]);
 
   const handlePrintReceipt = useCallback(() => {
     if (!receiptRef.current) return;
@@ -137,8 +174,15 @@ export default function POSPage() {
 
   const handleCloseReceipt = useCallback(() => {
     setShowReceipt(false);
+    setLoyaltyDiscount(0);
+    setLoyaltyPointsToRedeem(0);
     clearCart();
   }, [clearCart]);
+
+  const handleRewardSelect = useCallback((discount: number, pointsUsed: number) => {
+    setLoyaltyDiscount(discount);
+    setLoyaltyPointsToRedeem(pointsUsed);
+  }, []);
 
   const isLoading = storeLoading || productsLoading;
 
@@ -208,6 +252,15 @@ export default function POSPage() {
                 />
               </div>
             </div>
+
+            {/* Loyalty Widget */}
+            <LoyaltyWidget
+              storeId={store.id}
+              customerPhone={customerInfo.phone}
+              orderTotal={total}
+              onRewardSelect={handleRewardSelect}
+              onPointsEarnedPreview={setPointsToEarnPreview}
+            />
           </div>
 
           {/* Cart Items */}
@@ -270,11 +323,15 @@ export default function POSPage() {
                 orderNumber={lastSale.orderNumber}
                 storeName={store.brand_name || store.name}
                 storeAddress={store.address || 'Address not set'}
+                storeId={store.id}
                 gstNumber={store.gst_number || 'GST not set'}
                 items={lastSale.items}
                 subtotal={subtotal}
                 discount={discount}
                 discountAmount={discountAmount}
+                loyaltyDiscount={lastSale.loyaltyDiscount}
+                loyaltyPointsEarned={lastSale.loyaltyPointsEarned}
+                loyaltyPointsRedeemed={lastSale.loyaltyPointsRedeemed}
                 taxRate={TAX_RATE}
                 taxAmount={taxAmount}
                 total={lastSale.total}
