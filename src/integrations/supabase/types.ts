@@ -55,6 +55,151 @@ export type Database = {
           },
         ]
       }
+      loyalty_accounts: {
+        Row: {
+          created_at: string
+          customer_name: string | null
+          customer_phone: string
+          id: string
+          lifetime_points: number
+          store_id: string
+          tier: string | null
+          total_points: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_name?: string | null
+          customer_phone: string
+          id?: string
+          lifetime_points?: number
+          store_id: string
+          tier?: string | null
+          total_points?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string
+          id?: string
+          lifetime_points?: number
+          store_id?: string
+          tier?: string | null
+          total_points?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_accounts_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loyalty_rewards: {
+        Row: {
+          created_at: string
+          current_redemptions: number | null
+          description: string | null
+          discount_type: string
+          discount_value: number
+          id: string
+          is_active: boolean | null
+          max_redemptions: number | null
+          name: string
+          points_required: number
+          store_id: string
+          valid_from: string | null
+          valid_until: string | null
+        }
+        Insert: {
+          created_at?: string
+          current_redemptions?: number | null
+          description?: string | null
+          discount_type: string
+          discount_value: number
+          id?: string
+          is_active?: boolean | null
+          max_redemptions?: number | null
+          name: string
+          points_required: number
+          store_id: string
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Update: {
+          created_at?: string
+          current_redemptions?: number | null
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          id?: string
+          is_active?: boolean | null
+          max_redemptions?: number | null
+          name?: string
+          points_required?: number
+          store_id?: string
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_rewards_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loyalty_transactions: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          loyalty_account_id: string
+          order_id: string | null
+          points: number
+          transaction_type: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          loyalty_account_id: string
+          order_id?: string | null
+          points: number
+          transaction_type: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          loyalty_account_id?: string
+          order_id?: string | null
+          points?: number
+          transaction_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_transactions_loyalty_account_id_fkey"
+            columns: ["loyalty_account_id"]
+            isOneToOne: false
+            referencedRelation: "loyalty_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loyalty_transactions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_items: {
         Row: {
           created_at: string
@@ -119,6 +264,9 @@ export type Database = {
           discount_amount: number | null
           discount_percent: number | null
           id: string
+          loyalty_discount: number | null
+          loyalty_points_earned: number | null
+          loyalty_points_redeemed: number | null
           notes: string | null
           order_number: string
           payment_method: string | null
@@ -137,6 +285,9 @@ export type Database = {
           discount_amount?: number | null
           discount_percent?: number | null
           id?: string
+          loyalty_discount?: number | null
+          loyalty_points_earned?: number | null
+          loyalty_points_redeemed?: number | null
           notes?: string | null
           order_number: string
           payment_method?: string | null
@@ -155,6 +306,9 @@ export type Database = {
           discount_amount?: number | null
           discount_percent?: number | null
           id?: string
+          loyalty_discount?: number | null
+          loyalty_points_earned?: number | null
+          loyalty_points_redeemed?: number | null
           notes?: string | null
           order_number?: string
           payment_method?: string | null
@@ -365,6 +519,58 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      reward_redemptions: {
+        Row: {
+          created_at: string
+          discount_applied: number
+          id: string
+          loyalty_account_id: string
+          order_id: string | null
+          points_spent: number
+          reward_id: string
+        }
+        Insert: {
+          created_at?: string
+          discount_applied: number
+          id?: string
+          loyalty_account_id: string
+          order_id?: string | null
+          points_spent: number
+          reward_id: string
+        }
+        Update: {
+          created_at?: string
+          discount_applied?: number
+          id?: string
+          loyalty_account_id?: string
+          order_id?: string | null
+          points_spent?: number
+          reward_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reward_redemptions_loyalty_account_id_fkey"
+            columns: ["loyalty_account_id"]
+            isOneToOne: false
+            referencedRelation: "loyalty_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reward_redemptions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reward_redemptions_reward_id_fkey"
+            columns: ["reward_id"]
+            isOneToOne: false
+            referencedRelation: "loyalty_rewards"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       stores: {
         Row: {
@@ -807,6 +1013,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_loyalty_tier: {
+        Args: { lifetime_pts: number }
+        Returns: string
+      }
       get_low_stock_items: {
         Args: { p_store_id: string }
         Returns: {
