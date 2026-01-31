@@ -8,6 +8,8 @@ import {
   IconRefresh,
   IconLink,
   IconPhoto,
+  IconMicrophone,
+  IconX,
 } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -17,6 +19,7 @@ import { useProductsWithDetails } from '@/hooks/useProducts';
 import { LiveCameraTryOn } from '@/components/tryon/LiveCameraTryOn';
 import { EcomTryOn } from '@/components/tryon/EcomTryOn';
 import { SavedTryOnGallery } from '@/components/tryon/SavedTryOnGallery';
+import { VoiceChat } from '@/components/tryon/VoiceChat';
 
 export default function TryOnPage() {
   const navigate = useNavigate();
@@ -26,6 +29,7 @@ export default function TryOnPage() {
 
   const [activeTab, setActiveTab] = useState('live-camera');
   const [language, setLanguage] = useState<'english' | 'hindi' | 'hinglish'>('hinglish');
+  const [showVoiceChat, setShowVoiceChat] = useState(false);
 
   // Filter products for try-on (costumes and jewellery)
   const tryOnProducts = (products || []).filter((p: any) => {
@@ -76,12 +80,40 @@ export default function TryOnPage() {
               </button>
             ))}
           </div>
+          <Button
+            variant={showVoiceChat ? 'destructive' : 'outline'}
+            size="sm"
+            onClick={() => setShowVoiceChat(!showVoiceChat)}
+            className="gap-2"
+          >
+            {showVoiceChat ? (
+              <>
+                <IconX className="w-4 h-4" />
+                Close Chat
+              </>
+            ) : (
+              <>
+                <IconMicrophone className="w-4 h-4" />
+                Voice AI
+              </>
+            )}
+          </Button>
           <Button variant="gold" onClick={() => navigate('/kiosk')}>
             <IconPlayerPlay className="w-4 h-4" />
             Launch Kiosk
           </Button>
         </div>
       </div>
+
+      {/* Voice Chat Panel */}
+      <AnimatePresence>
+        {showVoiceChat && (
+          <VoiceChat
+            language={language}
+            onClose={() => setShowVoiceChat(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Mode Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
