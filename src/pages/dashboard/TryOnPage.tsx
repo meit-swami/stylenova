@@ -12,14 +12,15 @@ import {
   IconQrcode,
   IconPlayerPlay,
   IconRefresh,
-  IconX,
-  IconVolume,
-  IconMicrophone
+  IconUpload,
+  IconLink,
+  IconPhoto,
 } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useStore } from '@/hooks/useDatabase';
 import { useProductsWithDetails } from '@/hooks/useProducts';
 import { useVirtualTryOn } from '@/hooks/useVirtualTryOn';
+import { LivePhotoUpload } from '@/components/tryon/LivePhotoUpload';
+import { EcomTryOn } from '@/components/tryon/EcomTryOn';
+import { SavedTryOnGallery } from '@/components/tryon/SavedTryOnGallery';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -55,21 +59,21 @@ export default function TryOnPage() {
     reset,
   } = useVirtualTryOn();
 
+  const [activeTab, setActiveTab] = useState('live-camera');
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [language, setLanguage] = useState<'english' | 'hindi' | 'hinglish'>('hinglish');
   const [showWishlistDialog, setShowWishlistDialog] = useState(false);
   const [customerInfo, setCustomerInfo] = useState({ name: '', phone: '' });
   const [wishlistItems, setWishlistItems] = useState<any[]>([]);
+  const [uploadedCustomerImage, setUploadedCustomerImage] = useState<string | null>(null);
 
-  // Initialize camera on mount
   useEffect(() => {
     return () => {
       stopCamera();
     };
   }, [stopCamera]);
 
-  // Get recommendations when we have try-on results
   useEffect(() => {
     if (tryOnResult?.detectedFeatures && products) {
       getRecommendations(tryOnResult.detectedFeatures, products).then(setRecommendations);
@@ -112,7 +116,6 @@ export default function TryOnPage() {
     }
 
     try {
-      // Create try-on session
       const { data: session, error: sessionError } = await supabase
         .from('tryon_sessions')
         .insert({
@@ -130,8 +133,7 @@ export default function TryOnPage() {
 
       if (sessionError) throw sessionError;
 
-      // Create wishlist
-      const { data: wishlist, error: wishlistError } = await supabase
+      const { error: wishlistError } = await supabase
         .from('wishlists')
         .insert({
           store_id: store.id,
@@ -147,11 +149,6 @@ export default function TryOnPage() {
 
       toast.success('Wishlist saved! Share link generated.');
       setShowWishlistDialog(false);
-      
-      // Open share URL
-      const shareUrl = `${window.location.origin}/wishlist/${wishlist.id}`;
-      navigator.clipboard.writeText(shareUrl);
-      toast.info('Share link copied to clipboard');
     } catch (error: any) {
       console.error('Error saving wishlist:', error);
       toast.error('Failed to save wishlist');
@@ -164,10 +161,15 @@ export default function TryOnPage() {
     setRecommendations([]);
     setWishlistItems([]);
     setCustomerInfo({ name: '', phone: '' });
+    setUploadedCustomerImage(null);
     stopCamera();
   };
 
-  // Use products or sample data
+  const handleLivePhotoAnalysis = (features: any, imageUrl: string) => {
+    setUploadedCustomerImage(imageUrl);
+    toast.success('Photo analyzed! You can now try on products.');
+  };
+
   const displayProducts = products?.length ? products : sampleProducts;
 
   return (
@@ -176,7 +178,6 @@ export default function TryOnPage() {
       animate={{ opacity: 1 }}
       className="space-y-6"
     >
-      {/* Hidden canvas for capture */}
       <canvas ref={canvasRef} className="hidden" />
 
       {/* Header */}
@@ -186,7 +187,7 @@ export default function TryOnPage() {
             Virtual Try-On Studio
           </h1>
           <p className="text-muted-foreground mt-1">
-            AI-powered outfit visualization for your customers
+            AI-powered outfit visualization with live photo upload & eCom try-on
           </p>
         </div>
         <div className="flex gap-3">
@@ -201,263 +202,267 @@ export default function TryOnPage() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Left Panel - Camera/Preview */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Camera View */}
-          <div className="bg-card rounded-2xl border border-border overflow-hidden">
-            <div className="aspect-video bg-gradient-to-br from-slate-900 to-slate-800 relative flex items-center justify-center">
-              {isCapturing ? (
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover"
-                  style={{ transform: 'scaleX(-1)' }}
-                />
-              ) : capturedImage ? (
-                <img 
-                  src={capturedImage} 
-                  alt="Captured" 
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="text-center text-muted-foreground">
-                  <div className="w-20 h-20 rounded-full bg-muted/20 flex items-center justify-center mx-auto mb-4">
-                    <IconCamera className="w-10 h-10" />
-                  </div>
-                  <p className="font-medium mb-2">Camera Preview</p>
-                  <p className="text-sm opacity-60">Click capture to start</p>
-                </div>
-              )}
-              
-              {/* Detection Overlay */}
-              {isCapturing && (
-                <div className="absolute inset-4 border-2 border-dashed border-primary/30 rounded-xl pointer-events-none" />
-              )}
-              
-              {/* Controls */}
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3">
-                <Button 
-                  variant="glass" 
-                  size="lg"
-                  onClick={handleCapture}
-                  disabled={isProcessing}
-                >
-                  <IconCamera className="w-5 h-5" />
-                  {isCapturing ? 'Capture' : capturedImage ? 'Retake' : 'Start Camera'}
-                </Button>
-                {capturedImage && (
-                  <Button variant="glass" size="lg" onClick={() => { reset(); startCamera(); }}>
-                    <IconRefresh className="w-5 h-5" />
-                    Reset
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
+      {/* Mode Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="live-camera" className="flex items-center gap-2">
+            <IconCamera className="w-4 h-4" />
+            <span className="hidden sm:inline">Live Camera</span>
+          </TabsTrigger>
+          <TabsTrigger value="photo-upload" className="flex items-center gap-2">
+            <IconUpload className="w-4 h-4" />
+            <span className="hidden sm:inline">Photo Upload</span>
+          </TabsTrigger>
+          <TabsTrigger value="ecom-tryon" className="flex items-center gap-2">
+            <IconLink className="w-4 h-4" />
+            <span className="hidden sm:inline">eCom Try-On</span>
+          </TabsTrigger>
+          <TabsTrigger value="saved" className="flex items-center gap-2">
+            <IconPhoto className="w-4 h-4" />
+            <span className="hidden sm:inline">Saved</span>
+          </TabsTrigger>
+        </TabsList>
 
-          {/* AI Detection Results */}
-          <div className="bg-card rounded-2xl border border-border p-6">
-            <h3 className="font-display text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-              <IconSparkles className="w-5 h-5 text-secondary" />
-              AI Detection Results
-            </h3>
-            
-            <div className="grid sm:grid-cols-4 gap-4">
-              <div className="p-4 rounded-xl bg-muted/50">
-                <IconUser className="w-6 h-6 text-primary mb-2" />
-                <p className="text-sm text-muted-foreground">Skin Tone</p>
-                <p className="font-medium text-foreground">
-                  {tryOnResult?.detectedFeatures?.skinTone || 'Analyzing...'}
-                </p>
+        {/* Live Camera Mode */}
+        <TabsContent value="live-camera" className="mt-6">
+          <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              {/* Camera View */}
+              <div className="bg-card rounded-2xl border border-border overflow-hidden">
+                <div className="aspect-video bg-muted relative flex items-center justify-center">
+                  {isCapturing ? (
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                      style={{ transform: 'scaleX(-1)' }}
+                    />
+                  ) : capturedImage ? (
+                    <img 
+                      src={capturedImage} 
+                      alt="Captured" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="text-center text-muted-foreground">
+                      <div className="w-20 h-20 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
+                        <IconCamera className="w-10 h-10" />
+                      </div>
+                      <p className="font-medium mb-2">Camera Preview</p>
+                      <p className="text-sm opacity-60">Click capture to start</p>
+                    </div>
+                  )}
+                  
+                  {isCapturing && (
+                    <div className="absolute inset-4 border-2 border-dashed border-primary/30 rounded-xl pointer-events-none" />
+                  )}
+                  
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3">
+                    <Button 
+                      variant="glass" 
+                      size="lg"
+                      onClick={handleCapture}
+                      disabled={isProcessing}
+                    >
+                      <IconCamera className="w-5 h-5" />
+                      {isCapturing ? 'Capture' : capturedImage ? 'Retake' : 'Start Camera'}
+                    </Button>
+                    {capturedImage && (
+                      <Button variant="glass" size="lg" onClick={() => { reset(); startCamera(); }}>
+                        <IconRefresh className="w-5 h-5" />
+                        Reset
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="p-4 rounded-xl bg-muted/50">
-                <IconRuler className="w-6 h-6 text-primary mb-2" />
-                <p className="text-sm text-muted-foreground">Body Type</p>
-                <p className="font-medium text-foreground">
-                  {tryOnResult?.detectedFeatures?.bodyType || 'Analyzing...'}
-                </p>
+
+              {/* AI Detection Results */}
+              <div className="bg-card rounded-2xl border border-border p-6">
+                <h3 className="font-display text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <IconSparkles className="w-5 h-5 text-secondary" />
+                  AI Detection Results
+                </h3>
+                
+                <div className="grid sm:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-xl bg-muted/50">
+                    <IconUser className="w-6 h-6 text-primary mb-2" />
+                    <p className="text-sm text-muted-foreground">Skin Tone</p>
+                    <p className="font-medium text-foreground">
+                      {tryOnResult?.detectedFeatures?.skinTone || 'Analyzing...'}
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-muted/50">
+                    <IconRuler className="w-6 h-6 text-primary mb-2" />
+                    <p className="text-sm text-muted-foreground">Body Type</p>
+                    <p className="font-medium text-foreground">
+                      {tryOnResult?.detectedFeatures?.bodyType || 'Analyzing...'}
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-muted/50">
+                    <IconRuler className="w-6 h-6 text-primary mb-2" />
+                    <p className="text-sm text-muted-foreground">Height Est.</p>
+                    <p className="font-medium text-foreground">
+                      {tryOnResult?.detectedFeatures?.height || 'Analyzing...'}
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-muted/50">
+                    <IconPalette className="w-6 h-6 text-primary mb-2" />
+                    <p className="text-sm text-muted-foreground">Best Colors</p>
+                    <div className="flex gap-1 mt-1 flex-wrap">
+                      {(tryOnResult?.detectedFeatures?.recommendedColors || ['Detecting...']).slice(0, 3).map((color, i) => (
+                        <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                          {color}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="p-4 rounded-xl bg-muted/50">
-                <IconRuler className="w-6 h-6 text-primary mb-2" />
-                <p className="text-sm text-muted-foreground">Height Est.</p>
-                <p className="font-medium text-foreground">
-                  {tryOnResult?.detectedFeatures?.height || 'Analyzing...'}
-                </p>
+
+              {/* Try-On Result */}
+              <AnimatePresence>
+                {selectedProduct && tryOnResult && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    className="bg-card rounded-2xl border border-border overflow-hidden"
+                  >
+                    <div className="aspect-[3/4] bg-gradient-to-br from-muted/50 to-muted relative flex items-center justify-center p-8">
+                      <div className="text-center">
+                        <div className="w-32 h-32 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4 overflow-hidden">
+                          {selectedProduct.images?.[0] ? (
+                            <img src={selectedProduct.images[0]} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-6xl">{getProductEmoji(selectedProduct.category?.name)}</span>
+                          )}
+                        </div>
+                        <Badge className="mb-4" variant="secondary">
+                          {tryOnResult.matchScore}% Match
+                        </Badge>
+                        <p className="text-xl font-display font-bold text-foreground">
+                          {selectedProduct.name}
+                        </p>
+                        <p className="text-lg font-semibold text-primary mt-2">
+                          ₹{selectedProduct.base_price?.toLocaleString()}
+                        </p>
+                      </div>
+
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3">
+                        <Button variant="outline" size="sm" onClick={() => handleAddToWishlist(selectedProduct)}>
+                          <IconHeart className="w-4 h-4" />
+                          Save
+                        </Button>
+                        <Button variant="outline" size="sm">
+                          <IconShare className="w-4 h-4" />
+                          Share
+                        </Button>
+                        <Button variant="hero" size="sm" onClick={() => setShowWishlistDialog(true)}>
+                          <IconQrcode className="w-4 h-4" />
+                          QR Code
+                        </Button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Right Panel - Suggestions */}
+            <div className="space-y-6">
+              <div className="bg-card rounded-2xl border border-border p-6">
+                <h3 className="font-display text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <IconSparkles className="w-5 h-5 text-secondary" />
+                  AI Suggestions
+                </h3>
+                
+                <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                  {(recommendations.length ? recommendations : displayProducts?.slice(0, 5) || []).map((product: any) => (
+                    <button
+                      key={product.id}
+                      onClick={() => handleTryOn(product)}
+                      disabled={isProcessing || !capturedImage}
+                      className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
+                        selectedProduct?.id === product.id
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border hover:border-primary/50'
+                      } ${(!capturedImage || isProcessing) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
+                          {product.images?.[0] ? (
+                            <img src={product.images[0]} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-2xl">{getProductEmoji(product.category?.name)}</span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-foreground truncate">{product.name}</p>
+                          <p className="text-sm text-muted-foreground">₹{product.base_price?.toLocaleString()}</p>
+                        </div>
+                        <div className="text-right">
+                          <div className={`text-sm font-medium ${
+                            (product.matchScore || 85) >= 90 ? 'text-emerald-500' :
+                            (product.matchScore || 85) >= 80 ? 'text-amber-500' : 'text-muted-foreground'
+                          }`}>
+                            {product.matchScore || Math.floor(Math.random() * 15 + 80)}% match
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="p-4 rounded-xl bg-muted/50">
-                <IconPalette className="w-6 h-6 text-primary mb-2" />
-                <p className="text-sm text-muted-foreground">Best Colors</p>
-                <div className="flex gap-1 mt-1 flex-wrap">
-                  {(tryOnResult?.detectedFeatures?.recommendedColors || ['Detecting...']).slice(0, 3).map((color, i) => (
-                    <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                      {color}
-                    </span>
+
+              {/* Language Selector */}
+              <div className="bg-card rounded-2xl border border-border p-6">
+                <h3 className="font-display text-lg font-semibold text-foreground mb-4">
+                  AI Language
+                </h3>
+                <div className="flex gap-2">
+                  {(['hindi', 'english', 'hinglish'] as const).map((lang) => (
+                    <Button 
+                      key={lang}
+                      variant={language === lang ? 'default' : 'outline'} 
+                      size="sm" 
+                      className="flex-1 capitalize"
+                      onClick={() => setLanguage(lang)}
+                    >
+                      {lang}
+                    </Button>
                   ))}
                 </div>
               </div>
             </div>
           </div>
+        </TabsContent>
 
-          {/* Try-On Result */}
-          <AnimatePresence>
-            {selectedProduct && tryOnResult && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="bg-card rounded-2xl border border-border overflow-hidden"
-              >
-                <div className="aspect-[3/4] bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 relative flex items-center justify-center p-8">
-                  <div className="text-center">
-                    <div className="w-32 h-32 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4 overflow-hidden">
-                      {selectedProduct.images?.[0] ? (
-                        <img src={selectedProduct.images[0]} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-6xl">{getProductEmoji(selectedProduct.category?.name)}</span>
-                      )}
-                    </div>
-                    <Badge className="mb-4" variant="secondary">
-                      {tryOnResult.matchScore}% Match
-                    </Badge>
-                    <p className="text-xl font-display font-bold text-foreground">
-                      {selectedProduct.name}
-                    </p>
-                    <p className="text-lg font-semibold text-primary mt-2">
-                      ₹{selectedProduct.base_price?.toLocaleString()}
-                    </p>
-                  </div>
+        {/* Photo Upload Mode */}
+        <TabsContent value="photo-upload" className="mt-6">
+          <LivePhotoUpload
+            storeId={store?.id}
+            onAnalysisComplete={handleLivePhotoAnalysis}
+            language={language}
+          />
+        </TabsContent>
 
-                  {/* Action Buttons */}
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3">
-                    <Button variant="outline" size="sm" onClick={() => handleAddToWishlist(selectedProduct)}>
-                      <IconHeart className="w-4 h-4" />
-                      Save
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <IconShare className="w-4 h-4" />
-                      Share
-                    </Button>
-                    <Button variant="hero" size="sm" onClick={() => setShowWishlistDialog(true)}>
-                      <IconQrcode className="w-4 h-4" />
-                      QR Code
-                    </Button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        {/* eCom Try-On Mode */}
+        <TabsContent value="ecom-tryon" className="mt-6">
+          <EcomTryOn
+            storeId={store?.id}
+            customerImage={uploadedCustomerImage || capturedImage || undefined}
+            language={language}
+          />
+        </TabsContent>
 
-        {/* Right Panel - Suggestions */}
-        <div className="space-y-6">
-          {/* AI Suggestions */}
-          <div className="bg-card rounded-2xl border border-border p-6">
-            <h3 className="font-display text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-              <IconSparkles className="w-5 h-5 text-secondary" />
-              AI Suggestions
-            </h3>
-            
-            <div className="space-y-3 max-h-[400px] overflow-y-auto">
-              {(recommendations.length ? recommendations : displayProducts?.slice(0, 5) || []).map((product: any) => (
-                <button
-                  key={product.id}
-                  onClick={() => handleTryOn(product)}
-                  disabled={isProcessing || !capturedImage}
-                  className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
-                    selectedProduct?.id === product.id
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-primary/50'
-                  } ${(!capturedImage || isProcessing) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
-                      {product.images?.[0] ? (
-                        <img src={product.images[0]} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-2xl">{getProductEmoji(product.category?.name)}</span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-foreground truncate">{product.name}</p>
-                      <p className="text-sm text-muted-foreground">₹{product.base_price?.toLocaleString()}</p>
-                    </div>
-                    <div className="text-right">
-                      <div className={`text-sm font-medium ${
-                        (product.matchScore || 85) >= 90 ? 'text-emerald-500' :
-                        (product.matchScore || 85) >= 80 ? 'text-amber-500' : 'text-muted-foreground'
-                      }`}>
-                        {product.matchScore || Math.floor(Math.random() * 15 + 80)}% match
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Wishlist Summary */}
-          <div className="bg-gradient-to-br from-primary to-accent rounded-2xl p-6 text-primary-foreground">
-            <IconHeart className="w-8 h-8 mb-4" />
-            <h3 className="font-display text-lg font-semibold mb-2">
-              Customer Wishlist
-            </h3>
-            <p className="text-sm opacity-80 mb-4">
-              {wishlistItems.length} items saved • Ready to share
-            </p>
-            <div className="flex gap-2">
-              <Button 
-                variant="glass" 
-                size="sm"
-                onClick={() => setShowWishlistDialog(true)}
-                disabled={wishlistItems.length === 0}
-              >
-                <IconQrcode className="w-4 h-4" />
-                Generate QR
-              </Button>
-              <Button variant="glass" size="sm">
-                <IconShare className="w-4 h-4" />
-                Share
-              </Button>
-            </div>
-          </div>
-
-          {/* AI Assistant */}
-          <div className="bg-card rounded-2xl border border-border p-6">
-            <h3 className="font-display text-lg font-semibold text-foreground mb-4">
-              AI Assistant
-            </h3>
-            <div className="p-4 rounded-xl bg-muted/50 italic text-muted-foreground min-h-[60px]">
-              {isProcessing ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                  Analyzing outfit...
-                </div>
-              ) : tryOnResult?.aiComment ? (
-                `"${tryOnResult.aiComment}"`
-              ) : (
-                "Capture a photo and select an outfit to get personalized recommendations!"
-              )}
-            </div>
-            <div className="flex gap-2 mt-4">
-              {(['hindi', 'english', 'hinglish'] as const).map((lang) => (
-                <Button 
-                  key={lang}
-                  variant={language === lang ? 'default' : 'outline'} 
-                  size="sm" 
-                  className="flex-1 capitalize"
-                  onClick={() => setLanguage(lang)}
-                >
-                  {lang}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+        {/* Saved Results */}
+        <TabsContent value="saved" className="mt-6">
+          <SavedTryOnGallery storeId={store?.id} />
+        </TabsContent>
+      </Tabs>
 
       {/* Wishlist Dialog */}
       <Dialog open={showWishlistDialog} onOpenChange={setShowWishlistDialog}>
@@ -508,7 +513,6 @@ export default function TryOnPage() {
   );
 }
 
-// Sample products for demo when no real products exist
 const sampleProducts = [
   { id: '1', name: 'Silk Saree - Royal Blue', base_price: 4599, category: { name: 'Sarees' }, images: [], matchScore: 95 },
   { id: '2', name: 'Designer Lehenga Set', base_price: 12999, category: { name: 'Lehengas' }, images: [], matchScore: 88 },

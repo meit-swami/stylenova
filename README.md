@@ -1,11 +1,52 @@
 # StyleNova - AI-Powered Retail Management Platform
 
-A comprehensive retail management SaaS platform built for fashion boutiques with virtual try-on capabilities, POS system, inventory management, and customer engagement features.
+A comprehensive retail management SaaS platform built for fashion boutiques with AI-powered virtual try-on capabilities, POS system, inventory management, and customer engagement features.
 
 ## 🌐 Live URLs
 
 - **Published App**: https://stylenova.lovable.app
 - **Preview URL**: https://ec80f0cd-bc67-4bb9-90b5-ea67c2d871e9.lovableproject.com
+
+---
+
+## 🛠️ Tech Stack
+
+### Frontend
+- **Framework**: React 18 with TypeScript
+- **Build Tool**: Vite
+- **Styling**: Tailwind CSS with custom design tokens
+- **UI Components**: shadcn/ui (Radix UI primitives)
+- **Animations**: Framer Motion
+- **Charts**: Recharts
+- **Icons**: Tabler Icons, Lucide React
+- **QR Codes**: qrcode.react
+- **Barcode Scanning**: html5-qrcode
+- **Routing**: React Router DOM v6
+- **State Management**: TanStack Query (React Query)
+- **Forms**: React Hook Form with Zod validation
+
+### Backend (Lovable Cloud / Supabase)
+- **Database**: PostgreSQL
+- **Authentication**: Supabase Auth
+- **Storage**: Supabase Storage
+- **Edge Functions**: Deno-based serverless functions
+- **Real-time**: Supabase Realtime subscriptions
+
+### AI Integration
+- **AI Gateway**: Lovable AI Gateway (https://ai.gateway.lovable.dev)
+- **Primary Model**: `google/gemini-3-flash-preview` (fast, balanced)
+- **Backup Models**: 
+  - `google/gemini-2.5-flash` - Multimodal + reasoning
+  - `google/gemini-2.5-pro` - Complex reasoning tasks
+  - `openai/gpt-5` - High accuracy tasks
+
+### AI Features Powered By
+| Feature | Model | Purpose |
+|---------|-------|---------|
+| Customer Analysis | gemini-3-flash-preview | Skin tone, body type, face shape detection |
+| Outfit Comments | gemini-3-flash-preview | Personalized fashion feedback in Hindi/English/Hinglish |
+| Product Analysis | gemini-3-flash-preview | eCom product categorization (women's costume/jewellery) |
+| Style Recommendations | gemini-3-flash-preview | Color and style suggestions based on features |
 
 ---
 
@@ -47,6 +88,12 @@ GET /rest/v1/wishlists?id=eq.{wishlistId}&is_public=eq.true
 GET /rest/v1/wishlist_items?wishlist_id=eq.{wishlistId}&select=*,tryon_results(*)
 ```
 
+#### Virtual Try-On Results
+```
+GET /rest/v1/virtual_tryon_results?store_id=eq.{storeId}&is_saved=eq.true
+POST /rest/v1/virtual_tryon_results - Save new try-on result
+```
+
 #### Store Information
 ```
 GET /rest/v1/stores?id=eq.{storeId}&select=name,brand_name,logo_url,address
@@ -60,7 +107,21 @@ GET /rest/v1/products?store_id=eq.{storeId}&is_active=eq.true&select=*,product_v
 ### Edge Functions
 ```
 POST /functions/v1/send-sms       - Send SMS notifications
-POST /functions/v1/ai-assistant   - AI-powered assistant
+POST /functions/v1/ai-assistant   - AI-powered assistant (outfit comments, analysis)
+```
+
+### AI Assistant Function Parameters
+```json
+{
+  "type": "analyze_customer" | "analyze_product" | "ecom_tryon" | "outfit_comment",
+  "context": {
+    "customerImage": "base64 image data",
+    "productImages": ["array of base64 images"],
+    "productUrl": "optional product URL",
+    "productDescription": "optional description"
+  },
+  "language": "english" | "hindi" | "hinglish"
+}
 ```
 
 ### Web Pages for Mobile WebView
@@ -105,6 +166,24 @@ POST /functions/v1/ai-assistant   - AI-powered assistant
 - Wishlist creation with QR sharing
 - Customer phone collection
 - SMS notifications for wishlists
+
+### 🪞 Virtual Try-On Studio (NEW)
+- **Live Camera Mode**: Real-time camera capture with AI analysis
+- **Photo Upload Mode**: Upload and analyze customer photos
+  - Skin tone detection
+  - Body type estimation
+  - Face shape analysis
+  - Color recommendations
+  - Style suggestions
+- **eCom Virtual Try-On**: 
+  - Enter product URL or description
+  - Upload 3-5 product images from different angles
+  - Auto-detect product category (women's costume/jewellery)
+  - Virtual try-on with match score
+- **Saved Results Gallery**:
+  - Save processed try-on results
+  - View without reprocessing
+  - Raw data preserved for future use
 
 ### 📊 Analytics Dashboard
 - Daily/Weekly/Monthly revenue charts
@@ -156,23 +235,12 @@ POST /functions/v1/ai-assistant   - AI-powered assistant
 - `tryon_results` - AI try-on results
 - `wishlists` - Customer wishlists
 - `wishlist_items` - Wishlist products
+- `virtual_tryon_results` - Saved processed try-on images with raw data
 
 ### Subscriptions
 - `subscription_plans` - Available plans
 - `subscriptions` - Store subscriptions
 - `tablet_requests` - Hardware requests
-
----
-
-## 🛠️ Tech Stack
-
-- **Frontend**: React 18, TypeScript, Vite
-- **Styling**: Tailwind CSS, shadcn/ui, Framer Motion
-- **Backend**: Supabase (PostgreSQL, Auth, Storage, Edge Functions)
-- **Charts**: Recharts
-- **QR Codes**: qrcode.react
-- **Barcode Scanning**: html5-qrcode
-- **Icons**: Tabler Icons, Lucide React
 
 ---
 

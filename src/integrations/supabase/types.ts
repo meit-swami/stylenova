@@ -921,6 +921,103 @@ export type Database = {
           },
         ]
       }
+      virtual_tryon_results: {
+        Row: {
+          ai_comment: string | null
+          analysis_type: string
+          created_at: string
+          customer_image_base64: string | null
+          customer_image_url: string | null
+          detected_features: Json | null
+          id: string
+          is_saved: boolean | null
+          match_score: number | null
+          processed_image_url: string | null
+          processing_status: string | null
+          product_category: string | null
+          product_id: string | null
+          product_images: string[]
+          product_name: string | null
+          product_url: string | null
+          raw_request_data: Json | null
+          raw_response_data: Json | null
+          session_id: string | null
+          store_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          ai_comment?: string | null
+          analysis_type: string
+          created_at?: string
+          customer_image_base64?: string | null
+          customer_image_url?: string | null
+          detected_features?: Json | null
+          id?: string
+          is_saved?: boolean | null
+          match_score?: number | null
+          processed_image_url?: string | null
+          processing_status?: string | null
+          product_category?: string | null
+          product_id?: string | null
+          product_images?: string[]
+          product_name?: string | null
+          product_url?: string | null
+          raw_request_data?: Json | null
+          raw_response_data?: Json | null
+          session_id?: string | null
+          store_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          ai_comment?: string | null
+          analysis_type?: string
+          created_at?: string
+          customer_image_base64?: string | null
+          customer_image_url?: string | null
+          detected_features?: Json | null
+          id?: string
+          is_saved?: boolean | null
+          match_score?: number | null
+          processed_image_url?: string | null
+          processing_status?: string | null
+          product_category?: string | null
+          product_id?: string | null
+          product_images?: string[]
+          product_name?: string | null
+          product_url?: string | null
+          raw_request_data?: Json | null
+          raw_response_data?: Json | null
+          session_id?: string | null
+          store_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "virtual_tryon_results_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "virtual_tryon_results_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "tryon_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "virtual_tryon_results_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wishlist_items: {
         Row: {
           created_at: string
