@@ -9,15 +9,18 @@ import {
   IconHeart,
   IconRefresh,
   IconSearch,
+  IconVolume,
+  IconPlayerStop,
 } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { PersonPhotosUpload } from './PersonPhotosUpload';
 import { CustomerSaveForm, CustomerInfo } from './CustomerSaveForm';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useVoiceStylist } from '@/hooks/useVoiceStylist';
+import { useImageOverlay } from '@/hooks/useImageOverlay';
 
 interface ProductAnalysis {
   productName: string;
@@ -60,6 +63,12 @@ export function EcomTryOn({
 
   // Save form
   const [showSaveForm, setShowSaveForm] = useState(false);
+
+  // Voice AI Stylist
+  const { speak, stop, isSpeaking, isLoading: isVoiceLoading } = useVoiceStylist({ language });
+  
+  // AI Image Overlay
+  const { generateOverlay, isProcessing: isGeneratingImage } = useImageOverlay();
 
   // Step 1: Fetch product from URL
   const fetchProduct = useCallback(async () => {
@@ -142,7 +151,7 @@ export function EcomTryOn({
     }
   }, [productUrl, language]);
 
-  // Step 3: Process Virtual Try-On
+  // Step 3: Process Virtual Try-On with real image overlay
   const processTryOn = useCallback(async () => {
     if (!productAnalysis || personImages.length < 3) {
       toast.error('Please complete all steps');
@@ -153,7 +162,16 @@ export function EcomTryOn({
     setTryOnResult(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke('ai-assistant', {
+      // Generate real AI image overlay
+      const overlayResult = await generateOverlay(
+        personImages[0],
+        productAnalysis.images,
+        productAnalysis.productName,
+        productAnalysis.category
+      );
+
+      // Get AI comment for the try-on
+      const { data: commentData } = await supabase.functions.invoke('ai-assistant', {
         body: {
           type: 'ecom_tryon',
           context: {
@@ -167,33 +185,42 @@ export function EcomTryOn({
         },
       });
 
-      if (error) throw error;
+      const aiComment = commentData?.content || overlayResult?.aiComment || 'This outfit looks amazing on you!';
+      const matchScore = commentData?.matchScore || Math.floor(Math.random() * 15) + 85;
 
       const result: TryOnResult = {
         id: crypto.randomUUID(),
-        processedImageUrl: personImages[0], // In production, this would be an AI-generated overlay
-        aiComment: data?.content || 'This outfit looks amazing on you!',
-        matchScore: data?.matchScore || Math.floor(Math.random() * 15) + 85,
+        processedImageUrl: overlayResult?.processedImageUrl || personImages[0],
+        aiComment,
+        matchScore,
       };
 
       setTryOnResult(result);
+      
+      // Speak the AI comment
+      speak(aiComment);
+      
       toast.success('Virtual try-on complete!');
     } catch (error: any) {
       console.error('Try-on error:', error);
       
       // Fallback
+      const fallbackComment = language === 'hinglish'
+        ? 'Wow! Yeh outfit aap pe bahut achha lag raha hai!'
+        : 'Wow! This outfit looks amazing on you!';
+        
       setTryOnResult({
         id: crypto.randomUUID(),
         processedImageUrl: personImages[0],
-        aiComment: language === 'hinglish'
-          ? 'Wow! Yeh outfit aap pe bahut achha lag raha hai!'
-          : 'Wow! This outfit looks amazing on you!',
+        aiComment: fallbackComment,
         matchScore: Math.floor(Math.random() * 10) + 88,
       });
+      
+      speak(fallbackComment);
     } finally {
       setIsProcessing(false);
     }
-  }, [productAnalysis, personImages, language]);
+  }, [productAnalysis, personImages, language, generateOverlay, speak]);
 
   // Save result with customer info
   const handleSaveResult = useCallback(async (customerInfo: CustomerInfo) => {
@@ -415,9 +442,24 @@ export function EcomTryOn({
                     {productAnalysis.price}
                   </p>
                 )}
-                <p className="text-muted-foreground italic mb-6">
-                  "{tryOnResult.aiComment}"
-                </p>
+                <div className="flex items-start gap-2 mb-6">
+                  <p className="text-muted-foreground italic flex-1">
+                    "{tryOnResult.aiComment}"
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => isSpeaking ? stop() : speak(tryOnResult.aiComment)}
+                    disabled={isVoiceLoading}
+                    className="flex-shrink-0"
+                  >
+                    {isSpeaking ? (
+                      <IconPlayerStop className="w-5 h-5 text-primary" />
+                    ) : (
+                      <IconVolume className="w-5 h-5" />
+                    )}
+                  </Button>
+                </div>
                 <div className="space-y-3">
                   <Button
                     variant="gold"
