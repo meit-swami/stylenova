@@ -124,6 +124,22 @@ Product colors: ${context.productColors?.join(", ")}
 Generate an encouraging comment about how this product would look on the customer.
 Also suggest a match score percentage (70-99%).`;
 
+    } else if (type === "voice_chat") {
+      systemPrompt = `You are StyleNova's AI fashion stylist having a voice conversation with a customer. Be warm, friendly, and conversational. Keep responses concise (2-3 sentences) since this is spoken aloud.
+
+${langInstruction}
+
+You can help with:
+- Outfit recommendations based on occasion, body type, or preferences
+- Color matching and styling tips
+- Fashion trends and seasonal suggestions
+- Virtual try-on guidance
+- General fashion questions
+
+Be enthusiastic but genuine. If you don't know something, say so politely.`;
+
+      userPrompt = context.message || "Hello! How can I help you with fashion today?";
+
     } else {
       // Default: general fashion assistant
       systemPrompt = `You are StyleNova's AI fashion assistant. Help customers with fashion advice, outfit suggestions, and style recommendations. ${langInstruction}`;
