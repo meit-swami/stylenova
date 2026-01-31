@@ -47,6 +47,58 @@ A comprehensive retail management SaaS platform built for fashion boutiques with
 | Outfit Comments | gemini-3-flash-preview | Personalized fashion feedback in Hindi/English/Hinglish |
 | Product Analysis | gemini-3-flash-preview | eCom product categorization (women's costume/jewellery) |
 | Style Recommendations | gemini-3-flash-preview | Color and style suggestions based on features |
+| Product URL Parsing | fetch-product edge function | Extract product images and details from any eCom URL |
+
+---
+
+## 🪞 Virtual Try-On Studio
+
+### Mode 1: Live Camera Try-On (Inventory Matching)
+**Purpose**: Match customer with available store inventory
+
+**Flow**:
+1. **Upload Person Photos** (3-5 required)
+   - Front view, side view, full body shots from different angles
+2. **AI Analyzes Customer Features**
+   - Skin tone detection
+   - Body type estimation
+   - Recommended colors
+3. **Automatic Inventory Matching**
+   - AI matches customer features with store products
+   - Products sorted by match score (%)
+   - AI-generated outfit comments
+4. **Virtual Overlay**
+   - Shows selected product virtually on customer
+5. **Save with Customer Info**
+   - Full Name, Mobile Number, Address (optional)
+   - Result saved for future viewing without reprocessing
+
+### Mode 2: eCom Virtual Try-On
+**Purpose**: Try products from any online store
+
+**Flow**:
+1. **Step 1: Enter Product URL**
+   - Paste any e-commerce product page URL
+   - System automatically fetches product images (up to 10)
+   - Auto-detects product category:
+     - ✅ Women's Costume (saree, lehenga, kurti, dress, gown, suit)
+     - ✅ Jewellery (necklace, earrings, bangles, pendant)
+     - ❌ Other categories not supported
+2. **Step 2: Upload Person Photos** (3-5 required)
+   - Front, side, full body from different angles
+3. **Step 3: Virtual Try-On Processing**
+   - AI generates virtual overlay
+   - Match score calculation
+   - Personalized AI comment in selected language
+4. **Save Result**
+   - Collect: Full Name, Mobile Number, Address (optional)
+   - Saved for future viewing without reprocessing
+   - Raw request/response data preserved
+
+### Mode 3: Saved Looks Gallery
+- View all previously saved try-on results
+- No reprocessing required
+- Access AI comments and match scores
 
 ---
 
@@ -92,6 +144,7 @@ GET /rest/v1/wishlist_items?wishlist_id=eq.{wishlistId}&select=*,tryon_results(*
 ```
 GET /rest/v1/virtual_tryon_results?store_id=eq.{storeId}&is_saved=eq.true
 POST /rest/v1/virtual_tryon_results - Save new try-on result
+GET /rest/v1/tryon_sessions?customer_phone=eq.{phone}&store_id=eq.{storeId}
 ```
 
 #### Store Information
@@ -101,13 +154,32 @@ GET /rest/v1/stores?id=eq.{storeId}&select=name,brand_name,logo_url,address
 
 #### Products (Public View)
 ```
-GET /rest/v1/products?store_id=eq.{storeId}&is_active=eq.true&select=*,product_variants(*)
+GET /rest/v1/products?store_id=eq.{storeId}&is_active=eq.true&select=*,product_variants(*),product_categories(name)
 ```
 
 ### Edge Functions
 ```
 POST /functions/v1/send-sms       - Send SMS notifications
 POST /functions/v1/ai-assistant   - AI-powered assistant (outfit comments, analysis)
+POST /functions/v1/fetch-product  - Fetch product images from eCom URL
+```
+
+### Fetch Product Function (NEW)
+```json
+// Request
+POST /functions/v1/fetch-product
+{
+  "url": "https://example.com/product/beautiful-saree"
+}
+
+// Response
+{
+  "productName": "Beautiful Red Silk Saree",
+  "description": "Elegant silk saree with gold zari work",
+  "images": ["https://...", "https://...", ...],
+  "price": "₹4,999",
+  "category": "women_costume" | "jewellery" | "unknown"
+}
 ```
 
 ### AI Assistant Function Parameters
@@ -118,7 +190,10 @@ POST /functions/v1/ai-assistant   - AI-powered assistant (outfit comments, analy
     "customerImage": "base64 image data",
     "productImages": ["array of base64 images"],
     "productUrl": "optional product URL",
-    "productDescription": "optional description"
+    "productDescription": "optional description",
+    "productName": "product name",
+    "productCategory": "women_costume | jewellery",
+    "productColors": ["Red", "Gold"]
   },
   "language": "english" | "hindi" | "hinglish"
 }
@@ -167,23 +242,27 @@ POST /functions/v1/ai-assistant   - AI-powered assistant (outfit comments, analy
 - Customer phone collection
 - SMS notifications for wishlists
 
-### 🪞 Virtual Try-On Studio (NEW)
-- **Live Camera Mode**: Real-time camera capture with AI analysis
-- **Photo Upload Mode**: Upload and analyze customer photos
-  - Skin tone detection
-  - Body type estimation
-  - Face shape analysis
-  - Color recommendations
-  - Style suggestions
+### 🪞 Virtual Try-On Studio
+- **Live Camera Mode**: 
+  - Upload 3-5 person photos from different angles
+  - AI analyzes skin tone, body type, recommended colors
+  - Automatic matching with store inventory products
+  - Match score and AI outfit comments
+  - Virtual overlay of selected outfit
+  - Save with customer info (Name, Mobile, Address)
+  
 - **eCom Virtual Try-On**: 
-  - Enter product URL or description
-  - Upload 3-5 product images from different angles
-  - Auto-detect product category (women's costume/jewellery)
+  - Enter any e-commerce product URL
+  - Auto-fetch product images (up to 10)
+  - Auto-detect category (women's costume/jewellery only)
+  - Upload 3-5 person photos
   - Virtual try-on with match score
-- **Saved Results Gallery**:
-  - Save processed try-on results
-  - View without reprocessing
-  - Raw data preserved for future use
+  - Save with customer info for future access
+  
+- **Saved Looks Gallery**:
+  - View all saved try-on results
+  - No reprocessing required
+  - Preserved raw data for debugging
 
 ### 📊 Analytics Dashboard
 - Daily/Weekly/Monthly revenue charts
@@ -231,11 +310,22 @@ POST /functions/v1/ai-assistant   - AI-powered assistant (outfit comments, analy
 - `reward_redemptions` - Redemption records
 
 ### Try-On & Wishlist
-- `tryon_sessions` - Customer try-on sessions
+- `tryon_sessions` - Customer try-on sessions with detected features
 - `tryon_results` - AI try-on results
 - `wishlists` - Customer wishlists
 - `wishlist_items` - Wishlist products
-- `virtual_tryon_results` - Saved processed try-on images with raw data
+- `virtual_tryon_results` - Saved processed images with:
+  - `customer_image_url` / `customer_image_base64`
+  - `product_images[]` - Array of product images
+  - `product_url` - Original eCom URL
+  - `product_name`, `product_category`
+  - `detected_features` - JSON of analyzed features
+  - `ai_comment` - AI-generated comment
+  - `match_score` - Compatibility percentage
+  - `raw_request_data` - Original request for debugging
+  - `raw_response_data` - AI response for debugging
+  - `is_saved` - Boolean for saved vs temporary
+  - `processing_status` - pending/completed/failed
 
 ### Subscriptions
 - `subscription_plans` - Available plans
