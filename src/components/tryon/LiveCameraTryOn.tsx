@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   IconSparkles,
@@ -6,6 +6,8 @@ import {
   IconHeart,
   IconShirt,
   IconRefresh,
+  IconVolume,
+  IconPlayerStop,
 } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +15,8 @@ import { PersonPhotosUpload } from './PersonPhotosUpload';
 import { CustomerSaveForm, CustomerInfo } from './CustomerSaveForm';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-
+import { useVoiceStylist } from '@/hooks/useVoiceStylist';
+import { useImageOverlay } from '@/hooks/useImageOverlay';
 interface InventoryProduct {
   id: string;
   name: string;
@@ -46,6 +49,12 @@ export function LiveCameraTryOn({
   const [processedImageUrl, setProcessedImageUrl] = useState<string | null>(null);
   const [showSaveForm, setShowSaveForm] = useState(false);
   const [detectedFeatures, setDetectedFeatures] = useState<any>(null);
+
+  // Voice AI Stylist
+  const { speak, stop, isSpeaking, isLoading: isVoiceLoading } = useVoiceStylist({ language });
+  
+  // AI Image Overlay
+  const { generateOverlay, isProcessing: isGeneratingImage } = useImageOverlay();
 
   const analyzeAndMatch = useCallback(async () => {
     if (personImages.length < 3) {
@@ -147,10 +156,29 @@ export function LiveCameraTryOn({
   const handleProductSelect = useCallback(async (product: MatchedProduct) => {
     setSelectedProduct(product);
     
-    // In a real implementation, this would generate an overlay image
-    // For now, we use the person's photo with product info
-    setProcessedImageUrl(personImages[0]);
-  }, [personImages]);
+    // Generate AI image overlay
+    const categoryName = product.category?.name?.toLowerCase() || '';
+    const productCategory = categoryName.includes('jewel') ? 'jewellery' : 'women_costume';
+    
+    const result = await generateOverlay(
+      personImages[0],
+      product.images || [],
+      product.name,
+      productCategory
+    );
+    
+    if (result) {
+      setProcessedImageUrl(result.processedImageUrl);
+      
+      // Speak the AI comment with voice
+      const comment = product.aiComment || result.aiComment;
+      if (comment) {
+        speak(comment);
+      }
+    } else {
+      setProcessedImageUrl(personImages[0]);
+    }
+  }, [personImages, generateOverlay, speak]);
 
   const handleSaveResult = useCallback(async (customerInfo: CustomerInfo) => {
     if (!selectedProduct || !storeId) return;
@@ -317,15 +345,24 @@ export function LiveCameraTryOn({
 
       {/* Selected Product Result */}
       <AnimatePresence>
-        {selectedProduct && processedImageUrl && (
+        {selectedProduct && (processedImageUrl || isGeneratingImage) && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-card rounded-2xl border border-border overflow-hidden"
           >
             <div className="grid md:grid-cols-2 gap-6 p-6">
-              <div className="aspect-[3/4] rounded-xl overflow-hidden bg-muted">
-                <img src={processedImageUrl} alt="Your look" className="w-full h-full object-cover" />
+              <div className="aspect-[3/4] rounded-xl overflow-hidden bg-muted relative">
+                {isGeneratingImage ? (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="text-center">
+                      <IconLoader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-3" />
+                      <p className="text-sm text-muted-foreground">Generating virtual try-on...</p>
+                    </div>
+                  </div>
+                ) : (
+                  <img src={processedImageUrl!} alt="Your look" className="w-full h-full object-cover" />
+                )}
               </div>
               <div className="flex flex-col justify-center">
                 <Badge variant="default" className="w-fit mb-4">
@@ -338,15 +375,31 @@ export function LiveCameraTryOn({
                   ₹{selectedProduct.base_price?.toLocaleString()}
                 </p>
                 {selectedProduct.aiComment && (
-                  <p className="text-muted-foreground italic mb-6">
-                    "{selectedProduct.aiComment}"
-                  </p>
+                  <div className="flex items-start gap-2 mb-6">
+                    <p className="text-muted-foreground italic flex-1">
+                      "{selectedProduct.aiComment}"
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => isSpeaking ? stop() : speak(selectedProduct.aiComment)}
+                      disabled={isVoiceLoading}
+                      className="flex-shrink-0"
+                    >
+                      {isSpeaking ? (
+                        <IconPlayerStop className="w-5 h-5 text-primary" />
+                      ) : (
+                        <IconVolume className="w-5 h-5" />
+                      )}
+                    </Button>
+                  </div>
                 )}
                 <Button
                   variant="gold"
                   size="lg"
                   onClick={() => setShowSaveForm(true)}
                   className="w-full"
+                  disabled={isGeneratingImage}
                 >
                   <IconHeart className="w-5 h-5" />
                   Save This Look

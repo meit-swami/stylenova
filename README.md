@@ -35,18 +35,22 @@ A comprehensive retail management SaaS platform built for fashion boutiques with
 ### AI Integration
 - **AI Gateway**: Lovable AI Gateway (https://ai.gateway.lovable.dev)
 - **Primary Model**: `google/gemini-3-flash-preview` (fast, balanced)
+- **Image Generation**: `google/gemini-2.5-flash-image` (virtual try-on overlays)
+- **Voice TTS**: ElevenLabs Multilingual v2 (Hindi/English/Hinglish)
 - **Backup Models**: 
   - `google/gemini-2.5-flash` - Multimodal + reasoning
   - `google/gemini-2.5-pro` - Complex reasoning tasks
   - `openai/gpt-5` - High accuracy tasks
 
 ### AI Features Powered By
-| Feature | Model | Purpose |
-|---------|-------|---------|
+| Feature | Model/Service | Purpose |
+|---------|---------------|---------|
 | Customer Analysis | gemini-3-flash-preview | Skin tone, body type, face shape detection |
 | Outfit Comments | gemini-3-flash-preview | Personalized fashion feedback in Hindi/English/Hinglish |
 | Product Analysis | gemini-3-flash-preview | eCom product categorization (women's costume/jewellery) |
 | Style Recommendations | gemini-3-flash-preview | Color and style suggestions based on features |
+| **Virtual Try-On Overlay** | gemini-2.5-flash-image | AI-generated image overlay of product on person |
+| **Voice AI Stylist** | ElevenLabs Multilingual v2 | Speaks outfit recommendations in Hindi/English/Hinglish |
 | Product URL Parsing | fetch-product edge function | Extract product images and details from any eCom URL |
 
 ---
@@ -159,9 +163,11 @@ GET /rest/v1/products?store_id=eq.{storeId}&is_active=eq.true&select=*,product_v
 
 ### Edge Functions
 ```
-POST /functions/v1/send-sms       - Send SMS notifications
-POST /functions/v1/ai-assistant   - AI-powered assistant (outfit comments, analysis)
-POST /functions/v1/fetch-product  - Fetch product images from eCom URL
+POST /functions/v1/send-sms              - Send SMS notifications
+POST /functions/v1/ai-assistant          - AI-powered assistant (outfit comments, analysis)
+POST /functions/v1/fetch-product         - Fetch product images from eCom URL
+POST /functions/v1/text-to-speech        - Voice AI stylist (ElevenLabs TTS)
+POST /functions/v1/generate-tryon-image  - AI image overlay for virtual try-on
 ```
 
 ### Fetch Product Function (NEW)
