@@ -30,13 +30,80 @@ serve(async (req) => {
 
     console.log("Fetching product from URL:", url);
 
-    // Fetch the product page HTML
+    // Detect platform for specialized extraction
+    const isMyntra = url.includes('myntra.com');
+    const isAjio = url.includes('ajio.com');
+    const isNykaa = url.includes('nykaa.com') || url.includes('nykaafashion.com');
+    const isFlipkart = url.includes('flipkart.com');
+    const isAmazon = url.includes('amazon.in') || url.includes('amazon.com');
+
+    // For sites with heavy JS/bot protection, try API-based approach first
+    if (isMyntra) {
+      const productId = url.match(/\/(\d+)\/buy/)?.[1] || url.match(/\/(\d+)\/?$/)?.[1];
+      if (productId) {
+        console.log("Detected Myntra product ID:", productId);
+        try {
+          // Try Myntra's internal API
+          const apiResponse = await fetch(
+            `https://www.myntra.com/gateway/v2/product/${productId}`,
+            {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+                "Accept": "application/json",
+                "Accept-Language": "en-IN,en;q=0.9",
+                "Referer": "https://www.myntra.com/",
+                "Origin": "https://www.myntra.com",
+              },
+            }
+          );
+          
+          if (apiResponse.ok) {
+            const data = await apiResponse.json();
+            const style = data?.style;
+            if (style) {
+              const images = style.media?.albums?.default?.images?.map((img: any) => 
+                img.imageURL?.replace('($width)', '1080').replace('($height)', '1440')
+              ) || [];
+              
+              console.log("Myntra API success:", { name: style.name, imageCount: images.length });
+              
+              return new Response(
+                JSON.stringify({
+                  productName: style.name || style.productDisplayName || "Myntra Product",
+                  description: style.description || "",
+                  images: images.slice(0, 10),
+                  price: style.price?.discounted ? `₹${style.price.discounted}` : "",
+                  category: detectCategory(style.articleType?.typeName || style.name || ""),
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
+          }
+        } catch (apiError) {
+          console.log("Myntra API failed, falling back to HTML scraping:", apiError);
+        }
+      }
+    }
+
+    // Fetch the product page HTML with enhanced headers
     const response = await fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-IN,en-GB;q=0.9,en-US;q=0.8,en;q=0.7,hi;q=0.6",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        "Sec-Ch-Ua-Mobile": "?1",
+        "Sec-Ch-Ua-Platform": '"Android"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
       },
+      redirect: "follow",
     });
 
     if (!response.ok) {
@@ -44,6 +111,26 @@ serve(async (req) => {
     }
 
     const html = await response.text();
+    
+    // Check if we got a blocked/maintenance page
+    if (html.includes('Site Maintenance') || html.includes('Access Denied') || html.length < 5000) {
+      console.log("Detected blocked page, trying alternative extraction...");
+      
+      // Return helpful error for manual image upload
+      return new Response(
+        JSON.stringify({
+          error: "blocked",
+          message: "This site blocks automated access. Please upload product images manually.",
+          productName: "Product from " + new URL(url).hostname,
+          description: "",
+          images: [],
+          price: "",
+          category: "unknown",
+          requiresManualUpload: true,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Extract product images using various patterns
     const images: string[] = [];
@@ -129,32 +216,13 @@ serve(async (req) => {
       price = priceMatches[0];
     }
 
-    // Detect category from content
-    let category = "unknown";
-    const lowerHtml = html.toLowerCase();
-    if (
-      lowerHtml.includes('saree') || 
-      lowerHtml.includes('lehenga') || 
-      lowerHtml.includes('kurti') || 
-      lowerHtml.includes('dress') ||
-      lowerHtml.includes('gown') ||
-      lowerHtml.includes('suit')
-    ) {
-      category = "women_costume";
-    } else if (
-      lowerHtml.includes('necklace') || 
-      lowerHtml.includes('earring') || 
-      lowerHtml.includes('bangle') ||
-      lowerHtml.includes('jewel') ||
-      lowerHtml.includes('pendant')
-    ) {
-      category = "jewellery";
-    }
+    // Detect category
+    const category = detectCategory(productName + " " + description);
 
     const productInfo: ProductInfo = {
       productName: productName || "Fashion Product",
       description: description || "",
-      images: images.slice(0, 10), // Return up to 10 images
+      images: images.slice(0, 10),
       price,
       category,
     };
@@ -173,8 +241,52 @@ serve(async (req) => {
     console.error("Fetch product error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ 
+        error: errorMessage,
+        message: "Could not fetch product. Please upload images manually.",
+        requiresManualUpload: true,
+        productName: "Fashion Product",
+        images: [],
+        category: "unknown",
+      }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
+
+// Helper function to detect category from text
+function detectCategory(text: string): string {
+  const lowerText = text.toLowerCase();
+  if (
+    lowerText.includes('saree') || 
+    lowerText.includes('lehenga') || 
+    lowerText.includes('kurti') || 
+    lowerText.includes('kurta') ||
+    lowerText.includes('dress') ||
+    lowerText.includes('gown') ||
+    lowerText.includes('suit') ||
+    lowerText.includes('salwar') ||
+    lowerText.includes('anarkali')
+  ) {
+    return "women_costume";
+  } else if (
+    lowerText.includes('necklace') || 
+    lowerText.includes('earring') || 
+    lowerText.includes('bangle') ||
+    lowerText.includes('jewel') ||
+    lowerText.includes('pendant') ||
+    lowerText.includes('ring') ||
+    lowerText.includes('bracelet')
+  ) {
+    return "jewellery";
+  } else if (
+    lowerText.includes('shirt') ||
+    lowerText.includes('trouser') ||
+    lowerText.includes('pant') ||
+    lowerText.includes('jeans') ||
+    lowerText.includes('blazer')
+  ) {
+    return "men_costume";
+  }
+  return "unknown";
+}

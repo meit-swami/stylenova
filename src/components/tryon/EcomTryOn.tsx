@@ -11,11 +11,13 @@ import {
   IconSearch,
   IconVolume,
   IconPlayerStop,
+  IconUpload,
 } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { PersonPhotosUpload } from './PersonPhotosUpload';
+import { ProductImageUpload } from './ProductImageUpload';
 import { CustomerSaveForm, CustomerInfo } from './CustomerSaveForm';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -25,12 +27,13 @@ import { useImageOverlay } from '@/hooks/useImageOverlay';
 interface ProductAnalysis {
   productName: string;
   description: string;
-  category: 'women_costume' | 'jewellery' | 'other';
+  category: 'women_costume' | 'jewellery' | 'men_costume' | 'other';
   images: string[];
   colors: string[];
   material: string;
   price: string;
   isValidForTryOn: boolean;
+  requiresManualUpload?: boolean;
 }
 
 interface TryOnResult {
@@ -88,8 +91,30 @@ export function EcomTryOn({
 
       if (fetchError) throw fetchError;
 
-      if (!fetchData.images || fetchData.images.length === 0) {
-        toast.warning('Could not extract product images. Please check the URL.');
+      // Check if site blocked access and requires manual upload
+      if (fetchData.requiresManualUpload || !fetchData.images || fetchData.images.length === 0) {
+        const hostname = new URL(productUrl).hostname.replace('www.', '');
+        
+        const analysis: ProductAnalysis = {
+          productName: fetchData.productName || `Product from ${hostname}`,
+          description: '',
+          category: 'women_costume', // Default for fashion sites
+          images: [],
+          colors: ['Multi-color'],
+          material: 'Premium fabric',
+          price: '',
+          isValidForTryOn: true,
+          requiresManualUpload: true,
+        };
+
+        setProductAnalysis(analysis);
+        
+        toast.info(
+          language === 'hinglish'
+            ? `${hostname} ne access block kar diya. Neeche product images upload karein.`
+            : `${hostname} blocked automated access. Please upload product images below.`,
+          { duration: 5000 }
+        );
         return;
       }
 
@@ -111,7 +136,7 @@ export function EcomTryOn({
       const content = analysisData?.content || '';
       
       // Determine category
-      let category: 'women_costume' | 'jewellery' | 'other' = 'other';
+      let category: 'women_costume' | 'jewellery' | 'men_costume' | 'other' = 'other';
       if (fetchData.category === 'women_costume' || content.toLowerCase().includes('costume') || 
           content.toLowerCase().includes('saree') || content.toLowerCase().includes('dress') ||
           content.toLowerCase().includes('lehenga') || content.toLowerCase().includes('kurti')) {
@@ -119,6 +144,9 @@ export function EcomTryOn({
       } else if (fetchData.category === 'jewellery' || content.toLowerCase().includes('jewel') ||
           content.toLowerCase().includes('necklace') || content.toLowerCase().includes('earring')) {
         category = 'jewellery';
+      } else if (fetchData.category === 'men_costume' || content.toLowerCase().includes('shirt') ||
+          content.toLowerCase().includes('blazer')) {
+        category = 'men_costume';
       }
 
       const analysis: ProductAnalysis = {
@@ -150,6 +178,18 @@ export function EcomTryOn({
       setIsFetching(false);
     }
   }, [productUrl, language]);
+
+  // Handle manual product image upload
+  const handleProductImagesChange = useCallback((images: string[]) => {
+    if (productAnalysis) {
+      setProductAnalysis({
+        ...productAnalysis,
+        images,
+        requiresManualUpload: images.length === 0,
+        isValidForTryOn: images.length > 0,
+      });
+    }
+  }, [productAnalysis]);
 
   // Step 3: Process Virtual Try-On with real image overlay
   const processTryOn = useCallback(async () => {
@@ -328,12 +368,14 @@ export function EcomTryOn({
           >
             <div className="flex items-start justify-between mb-4">
               <h3 className="font-display text-lg font-semibold text-foreground flex items-center gap-2">
-                {productAnalysis.isValidForTryOn ? (
-                  <IconCheck className="w-5 h-5 text-emerald-500" />
+                {productAnalysis.requiresManualUpload ? (
+                  <IconUpload className="w-5 h-5 text-primary" />
+                ) : productAnalysis.isValidForTryOn ? (
+                  <IconCheck className="w-5 h-5 text-accent" />
                 ) : (
-                  <IconAlertCircle className="w-5 h-5 text-amber-500" />
+                  <IconAlertCircle className="w-5 h-5 text-destructive" />
                 )}
-                Product Detected
+                {productAnalysis.requiresManualUpload ? 'Upload Product Images' : 'Product Detected'}
               </h3>
               <div className="flex items-center gap-2">
                 <Badge variant={productAnalysis.isValidForTryOn ? 'default' : 'destructive'}>
@@ -341,6 +383,8 @@ export function EcomTryOn({
                     ? "Women's Costume"
                     : productAnalysis.category === 'jewellery'
                     ? 'Jewellery'
+                    : productAnalysis.category === 'men_costume'
+                    ? "Men's Costume"
                     : 'Not Supported'}
                 </Badge>
                 <Button variant="ghost" size="sm" onClick={handleReset}>
@@ -349,38 +393,58 @@ export function EcomTryOn({
               </div>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Product Images */}
-              <div className="grid grid-cols-3 gap-2">
-                {productAnalysis.images.slice(0, 5).map((img, i) => (
-                  <div key={i} className="aspect-square rounded-lg overflow-hidden bg-muted">
-                    <img src={img} alt="" className="w-full h-full object-cover" />
-                  </div>
-                ))}
+            {/* Manual Product Image Upload */}
+            {productAnalysis.requiresManualUpload && (
+              <div className="mb-6">
+                <div className="bg-muted/50 rounded-xl p-4 border border-dashed border-border mb-4">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {language === 'hinglish' 
+                      ? 'Site ne access block kar diya hai. Product ke screenshots ya images upload karein:'
+                      : 'This site blocked automated access. Please upload product screenshots or images:'}
+                  </p>
+                  <ProductImageUpload
+                    images={productAnalysis.images}
+                    onImagesChange={handleProductImagesChange}
+                  />
+                </div>
               </div>
+            )}
 
-              {/* Product Details */}
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">Product Name</p>
-                  <p className="font-medium text-foreground">{productAnalysis.productName}</p>
+            {/* Show fetched images if available */}
+            {!productAnalysis.requiresManualUpload && productAnalysis.images.length > 0 && (
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Product Images */}
+                <div className="grid grid-cols-3 gap-2">
+                  {productAnalysis.images.slice(0, 5).map((img, i) => (
+                    <div key={i} className="aspect-square rounded-lg overflow-hidden bg-muted">
+                      <img src={img} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  ))}
                 </div>
-                {productAnalysis.price && (
+
+                {/* Product Details */}
+                <div className="space-y-3">
                   <div>
-                    <p className="text-sm text-muted-foreground">Price</p>
-                    <p className="font-semibold text-primary">{productAnalysis.price}</p>
+                    <p className="text-sm text-muted-foreground">Product Name</p>
+                    <p className="font-medium text-foreground">{productAnalysis.productName}</p>
                   </div>
-                )}
-                <div>
-                  <p className="text-sm text-muted-foreground">Colors</p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {productAnalysis.colors.map((color, i) => (
-                      <Badge key={i} variant="secondary">{color}</Badge>
-                    ))}
+                  {productAnalysis.price && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Price</p>
+                      <p className="font-semibold text-primary">{productAnalysis.price}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm text-muted-foreground">Colors</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {productAnalysis.colors.map((color, i) => (
+                        <Badge key={i} variant="secondary">{color}</Badge>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
